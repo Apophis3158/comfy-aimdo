@@ -6,6 +6,8 @@ SHARED_EXPORT
 void *vrambuf_create(int device, size_t max_size) {
     VramBuffer *buf;
 
+    max_size = CUDA_ALIGN_UP(max_size);
+
     buf = (VramBuffer *)calloc(1, sizeof(*buf) + sizeof(CUmemGenericAllocationHandle) * max_size / VRAM_CHUNK_SIZE);
     if (!buf) {
         return NULL;
