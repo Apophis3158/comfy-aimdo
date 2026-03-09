@@ -2,5 +2,5 @@
 
 
 SRCS="src/*.c src-posix/detour-hip.c"
-gcc $(hipconfig -C) -L $(hipconfig -p)/lib -shared -O2 -o comfy_aimdo/aimdo_rocm.so -fPIC -Werror \
+gcc $(hipconfig -C) -L $(hipconfig -p)/lib -shared -O2 -o comfy_aimdo/aimdo_rocm.so -fPIC -Werror -Wno-error=deprecated-declarations \
 	${SRCS} -l amdhip64

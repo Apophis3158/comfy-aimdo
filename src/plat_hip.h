@@ -37,6 +37,10 @@ void aimdo_teardown_hooks();
 #define cuMemUnmap hipMemUnmap
 #define CUresult hipError_t
 #define CUstream hipStream_t
+#define CUcontext hipCtx_t
+#define cuCtxGetCurrent hipCtxGetCurrent
+#define cuCtxSetCurrent hipCtxSetCurrent
+#define cuDevicePrimaryCtxRetain hipDevicePrimaryCtxRetain
 
 CUresult cuMemFreeAsync(CUdeviceptr, CUstream);
 CUresult cuMemAllocAsync(CUdeviceptr*, size_t, CUstream);
