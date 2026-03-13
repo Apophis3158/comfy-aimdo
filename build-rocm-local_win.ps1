@@ -5,13 +5,16 @@ $ErrorActionPreference = 'Stop'
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "git not found. Please install Git and ensure it is on PATH." }
 
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found. Is Visual Studio installed?" }
+
 $root = $PSScriptRoot
-function F([string]$p) { $p.Replace('\','/') }  # forward-slash paths for clang rsp
+function F([string]$p) { $p.Replace('\', '/') }  # forward-slash paths for clang rsp
 
 # ── ROCm ───────────────────────────────────────────────────────────────────────
 $rocmBase = if ($env:VIRTUAL_ENV -and (Test-Path "$env:VIRTUAL_ENV\Lib\site-packages\_rocm_sdk_core")) {
     "$env:VIRTUAL_ENV\Lib\site-packages\_rocm_sdk_core"
-} elseif ($env:HIP_PATH)  { $env:HIP_PATH  } elseif ($env:ROCM_PATH) { $env:ROCM_PATH }
+} elseif ($env:HIP_PATH) { $env:HIP_PATH } elseif ($env:ROCM_PATH) { $env:ROCM_PATH }
 if (-not $rocmBase -or -not (Test-Path "$rocmBase\include\hip")) {
     throw "ROCm not found. Set HIP_PATH/ROCM_PATH or activate a venv with _rocm_sdk_core."
 }
@@ -28,13 +31,8 @@ if (Test-Path $detoursDir) {
     git clone -q --depth 1 https://github.com/microsoft/Detours.git $detoursDir
 }
 
-$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found. Is Visual Studio installed?" }
-$vcvars  = "$(& $vswhere -latest -property installationPath)\VC\Auxiliary\Build\vcvars64.bat"
-$bat = [IO.Path]::Combine([IO.Path]::GetTempPath(), [IO.Path]::GetRandomFileName() + ".bat")
-"@echo off`ncall `"$vcvars`" || exit /b 1`ncd /d `"$detoursDir\src`"`nnmake" | Set-Content $bat -Encoding ASCII
-cmd /c $bat
-Remove-Item $bat
+$vcvars = "$(& $vswhere -latest -property installationPath)\VC\Auxiliary\Build\vcvars64.bat"
+cmd.exe /c "call `"$vcvars`" && cd /d `"$detoursDir\src`" && nmake"
 if ($LASTEXITCODE -ne 0) { throw "Detours build failed (vcvars or nmake error)" }
 
 # ── Compile ────────────────────────────────────────────────────────────────────
