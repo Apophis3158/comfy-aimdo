@@ -25,6 +25,10 @@ def aimdo_to_tensor(alloc, device):
     _, ptr, size = alloc
     return get_tensor_from_raw_ptr(ptr, size, device)
 
+def hostbuf_to_tensor(hostbuf):
+    byte_view = (ctypes.c_uint8 * hostbuf.size).from_address(hostbuf.get_raw_address())
+    return torch.frombuffer(byte_view, dtype=torch.uint8)
+
 #pytorch doesnt have an API for a CUDAPluggableAllocator from an already loaded
 #library. Rather than force a second load that pytorch owns, construct these
 #pytorch internals outselves as sperate CDLL loads is far too risky.
