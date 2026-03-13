@@ -20,7 +20,7 @@ if (-not $rocmBase -or -not (Test-Path "$rocmBase\include\hip")) {
 }
 $clang = "$rocmBase\lib\llvm\bin\clang.exe"
 if (-not (Test-Path $clang)) { throw "clang.exe not found at: $clang" }
-Write-Host "ROCm: $rocmBase"
+"ROCm: $rocmBase`n"
 
 # ── Detours ────────────────────────────────────────────────────────────────────
 $detoursDir = "$root\Detours"
@@ -34,6 +34,7 @@ if (Test-Path $detoursDir) {
 $vcvars = "$(& $vswhere -latest -property installationPath)\VC\Auxiliary\Build\vcvars64.bat"
 cmd.exe /c "call `"$vcvars`" && cd /d `"$detoursDir\src`" && nmake"
 if ($LASTEXITCODE -ne 0) { throw "Detours build failed (vcvars or nmake error)" }
+"Detours build successful: Detours\lib.X64\detours.lib`n"
 
 # ── Compile ────────────────────────────────────────────────────────────────────
 # use pure command to build: pwsh will handle *.c expanding and \ slash
@@ -44,5 +45,13 @@ if ($LASTEXITCODE -ne 0) { throw "Detours build failed (vcvars or nmake error)" 
     -lamdhip64 -ldxgi -ldxguid -ldetours -lonecore `
     -o"comfy_aimdo/aimdo_rocm.dll"
 if ($LASTEXITCODE -ne 0) { throw "Build failed (exit code $LASTEXITCODE)" }
+"Build successful: comfy_aimdo\aimdo_rocm.dll`n"
 
-Write-Host "Build successful: comfy_aimdo\aimdo_rocm.dll"
+# Copy amdhip64_7.dll to comfy_aimdo directory
+$amdhipDll = "$rocmBase\bin\amdhip64_7.dll"
+if (Test-Path $amdhipDll) {
+    Copy-Item $amdhipDll -Destination "comfy_aimdo\" -Force
+    "Copied amdhip64_7.dll to comfy_aimdo\"
+} else {
+    Write-Warning "amdhip64_7.dll not found at: $amdhipDll"
+}
