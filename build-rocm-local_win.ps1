@@ -3,6 +3,8 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "git not found. Please install Git and ensure it is on PATH." }
+
 $root = $PSScriptRoot
 function F([string]$p) { $p.Replace('\','/') }  # forward-slash paths for clang rsp
 
@@ -18,10 +20,13 @@ if (-not (Test-Path $clang)) { throw "clang.exe not found at: $clang" }
 Write-Host "ROCm: $rocmBase"
 
 # ── Detours ────────────────────────────────────────────────────────────────────
-$detoursDir = "$root\detours"
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "git not found. Please install Git and ensure it is on PATH." }
-if (Test-Path $detoursDir) { Remove-Item -Recurse -Force $detoursDir }
-git clone -q --depth 1 https://github.com/microsoft/Detours.git $detoursDir
+$detoursDir = "$root\Detours"
+if (Test-Path $detoursDir) {
+    git -C $detoursDir fetch -q --depth 1 origin main
+    git -C $detoursDir reset -q --hard FETCH_HEAD
+} else {
+    git clone -q --depth 1 https://github.com/microsoft/Detours.git $detoursDir
+}
 
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found. Is Visual Studio installed?" }
@@ -42,5 +47,4 @@ if ($LASTEXITCODE -ne 0) { throw "Detours build failed (vcvars or nmake error)" 
     -o"comfy_aimdo/aimdo_rocm.dll"
 if ($LASTEXITCODE -ne 0) { throw "Build failed (exit code $LASTEXITCODE)" }
 
-Remove-Item -Recurse -Force $detoursDir
 Write-Host "Build successful: comfy_aimdo\aimdo_rocm.dll"
