@@ -33,12 +33,12 @@ Remove-Item $bat
 if ($LASTEXITCODE -ne 0) { throw "Detours build failed (vcvars or nmake error)" }
 
 # ── Compile ────────────────────────────────────────────────────────────────────
-# use pure command to build: pwsh will handel *.c expanding and \ slash
+# use pure command to build: pwsh will handle *.c expanding and \ slash
 & $clang src/*.c src-win/*.c -xc --target=x86_64-pc-windows-msvc `
     -shared -O3 -D__HIP_PLATFORM_AMD__ -Wno-unused-command-line-argument `
     -I"$rocmBase/include" -I"$detoursDir/include" -Isrc `
     -L"$rocmBase/lib" -L"$detoursDir/lib.X64" `
-    -lamdhip64 -ldxgi -ldxguid -ldetours `
+    -lamdhip64 -ldxgi -ldxguid -ldetours -lonecore `
     -o"comfy_aimdo/aimdo_rocm.dll"
 if ($LASTEXITCODE -ne 0) { throw "Build failed (exit code $LASTEXITCODE)" }
 
