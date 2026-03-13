@@ -1,10 +1,8 @@
 #pragma once
 
 #if defined(__HIP_PLATFORM_AMD__)
-#  include <hip/hip_runtime.h>
 #  include "plat_hip.h"
 #else
-#  include <cuda.h>
 #  include "plat_cuda.h"
 #endif
 

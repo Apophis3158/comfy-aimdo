@@ -1,4 +1,6 @@
+#include <hip/hip_runtime.h>
 #include <stdbool.h>
+
 bool aimdo_setup_hooks();
 void aimdo_teardown_hooks();
 
