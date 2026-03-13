@@ -33,23 +33,14 @@ Remove-Item $bat
 if ($LASTEXITCODE -ne 0) { throw "Detours build failed (vcvars or nmake error)" }
 
 # ── Compile ────────────────────────────────────────────────────────────────────
-$sources = @(Get-Item "$root\src\*.c" -ErrorAction SilentlyContinue) + @(Get-Item "$root\src-win\*.c" -ErrorAction SilentlyContinue) | ForEach-Object { "`"$(F $_.FullName)`"" }
-if (-not $sources) { throw "No .c source files found in src\ or src-win\." }
+# use pure command to build: pwsh will handel *.c expanding and \ slash
+& $clang src/*.c src-win/*.c -xc --target=x86_64-pc-windows-msvc `
+    -shared -O3 -D__HIP_PLATFORM_AMD__ -Wno-unused-command-line-argument `
+    -I"$rocmBase/include" -I"$detoursDir/include" -Isrc `
+    -L"$rocmBase/lib" -L"$detoursDir/lib.X64" `
+    -lamdhip64 -ldxgi -ldxguid -ldetours `
+    -o"comfy_aimdo/aimdo_rocm.dll"
+if ($LASTEXITCODE -ne 0) { throw "Build failed (exit code $LASTEXITCODE)" }
 
-$rspFile = "$root\build.rsp"
-[IO.File]::WriteAllLines($rspFile, @(
-    "--target=x86_64-pc-windows-msvc", "-shared", "-O3"
-    "-D__HIP_PLATFORM_AMD__", "-Wno-unused-command-line-argument"
-    "-x", "c"
-    "-I`"$(F $rocmBase)/include`"", "-I`"$(F $root)/src`"", "-I`"$(F $detoursDir)/include`""
-    "-L`"$(F $rocmBase)/lib`"", "-L`"$(F $detoursDir)/lib.X64`""
-    "-lamdhip64", "-ldxgi", "-ldxguid", "-ldetours"
-    "-o", "`"$(F $root)/comfy_aimdo/aimdo_rocm.dll`""
-) + $sources)
-
-& $clang "@$rspFile"
-$exitCode = $LASTEXITCODE
-Remove-Item $rspFile -ErrorAction SilentlyContinue
-if ($exitCode -ne 0) { throw "Build failed (exit code $exitCode)" }
 Remove-Item -Recurse -Force $detoursDir
 Write-Host "Build successful: comfy_aimdo\aimdo_rocm.dll"
