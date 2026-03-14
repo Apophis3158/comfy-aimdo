@@ -1,4 +1,5 @@
 import ctypes
+import os
 
 from . import control
 
@@ -22,7 +23,15 @@ class ModelMMAP:
         if lib is None:
             raise RuntimeError("comfy-aimdo is not initialized")
 
-        self.state = lib.model_mmap_allocate(filepath.encode())
+        normalized_path = os.fspath(filepath)
+        if isinstance(normalized_path, bytes):
+            filepath_bytes = normalized_path
+        elif os.name == "nt":
+            filepath_bytes = normalized_path.encode("utf-8")
+        else:
+            filepath_bytes = os.fsencode(normalized_path)
+
+        self.state = lib.model_mmap_allocate(filepath_bytes)
         if not self.state:
             raise RuntimeError(f"ModelMMAP allocation failed for {filepath}")
 

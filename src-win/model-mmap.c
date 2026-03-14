@@ -9,6 +9,35 @@ typedef struct {
     uint64_t size;
 } ModelMMAP;
 
+static wchar_t *utf8_to_wide(const char *str) {
+    int wide_len;
+    wchar_t *wide;
+
+    if (!str) {
+        return NULL;
+    }
+
+    wide_len = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, str, -1, NULL, 0);
+    if (wide_len <= 0) {
+        log(ERROR, "%s: failed to convert utf-8 path to utf-16. OS Error: %lu\n", __func__, GetLastError());
+        return NULL;
+    }
+
+    wide = calloc((size_t)wide_len, sizeof(wchar_t));
+    if (!wide) {
+        log(ERROR, "%s: allocation failed for wide path\n", __func__);
+        return NULL;
+    }
+
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, str, -1, wide, wide_len) <= 0) {
+        log(ERROR, "%s: failed to convert utf-8 path to utf-16. OS Error: %lu\n", __func__, GetLastError());
+        free(wide);
+        return NULL;
+    }
+
+    return wide;
+}
+
 static bool model_mmap_map(ModelMMAP *mmap) {
     mmap->hMapping = CreateFileMapping(mmap->hFile, NULL, PAGE_READONLY, 0, 0, NULL);
     if (!mmap->hMapping) {
@@ -44,6 +73,7 @@ static bool model_mmap_unmap(ModelMMAP *mmap, ULONG flags) {
 SHARED_EXPORT
 void *model_mmap_allocate(char *file_path) {
     ModelMMAP *mmap = calloc(1, sizeof(*mmap));
+    wchar_t *file_path_wide = NULL;
     LARGE_INTEGER fs;
 
     log(DEBUG, "%s: creating ModelMMAP for %s\n", __func__, file_path);
@@ -53,9 +83,17 @@ void *model_mmap_allocate(char *file_path) {
         goto fail_alloc;
     }
 
-    mmap->hFile = CreateFileA(file_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    file_path_wide = utf8_to_wide(file_path);
+    if (!file_path_wide) {
+        log(ERROR, "%s: could not convert file path from utf-8\n", __func__);
+        goto fail_file;
+    }
+
+    mmap->hFile = CreateFileW(file_path_wide, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    free(file_path_wide);
+    file_path_wide = NULL;
     if (mmap->hFile == INVALID_HANDLE_VALUE) {
-        log(ERROR, "%s: could not open file: %s\n", __func__, file_path);
+        log(ERROR, "%s: could not open file (utf-8 path was: %s). OS Error: %lu\n", __func__, file_path, GetLastError());
         goto fail_file;
     }
 
@@ -81,6 +119,7 @@ fail_map:
     VirtualFree(mmap->base_address, 0, MEM_RELEASE);
 fail_base:
 fail_file:
+    free(file_path_wide);
     if (mmap && mmap->hFile && mmap->hFile != INVALID_HANDLE_VALUE) {
         CloseHandle(mmap->hFile);
     }
