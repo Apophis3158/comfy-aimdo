@@ -25,7 +25,7 @@ def detect_vendor():
                 spec.loader.exec_module(module)
                 version = module.__version__
     except Exception as e:
-        logging.warning("Failed to detect Torch version")
+        logging.warning(f"Failed to detect Torch version: {e}")
         pass
 
     if '+cu' in version:
@@ -56,19 +56,38 @@ def init(implementation: AimdoImpl | None = None):
     try:
         base_path = Path(__file__).parent.resolve()
         system = platform.system()
-        errors = []
         if system == "Windows":
             ext = "dll"
+
+            # Fix print "HIP Library Path: C:\WINDOWS\SYSTEM32\amdhip64_7.dll"
+            # On Windows with ROCm, ensure the ROCm/HIP bin folder is in the DLL search path
+            if implementation == AimdoImpl.ROCM:
+                bin_path = None
+                if "VIRTUAL_ENV" in os.environ:
+                    bin_path = Path(os.environ['VIRTUAL_ENV']) / "Lib" / "site-packages" / "_rocm_sdk_core" / "bin"
+                    if not bin_path.exists():
+                        bin_path = None
+                if bin_path is None and "HIP_PATH" in os.environ:
+                    bin_path = Path(os.environ['HIP_PATH']) / "bin"
+                    if not bin_path.exists():
+                        bin_path = None
+
+                if bin_path is not None:
+                    logging.debug(f"Adding ROCm bin path to DLL search directories: {bin_path}")
+                    try:
+                        os.add_dll_directory(str(bin_path))
+                    except Exception as e:
+                        logging.info(f"Failed to add ROCm bin path to DLL search directories: {e}")
         elif system == "Linux":
             ext = "so"
         else:
             logging.info(f"comfy-aimdo unsupported operating system: {system}")
-            logging.info(f"NOTE: comfy-aimdo currently only supports Windows and Linux")
+            logging.info("NOTE: comfy-aimdo currently only supports Windows and Linux")
             return False
         lib = ctypes.CDLL(str(base_path / f"{impl}.{ext}"), mode=258)
     except Exception as e:
         logging.info(f"comfy-aimdo failed to load: {e}")
-        logging.info(f"NOTE: comfy-aimdo currently only supports Nvidia and AMD GPUs")
+        logging.info("NOTE: comfy-aimdo currently only supports Nvidia and AMD GPUs")
         return False
 
     lib.get_total_vram_usage.argtypes = []

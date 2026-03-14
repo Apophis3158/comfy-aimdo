@@ -45,13 +45,4 @@ if ($LASTEXITCODE -ne 0) { throw "Detours build failed (vcvars or nmake error)" 
     -lamdhip64 -ldxgi -ldxguid -ldetours -lonecore `
     -o"comfy_aimdo/aimdo_rocm.dll"
 if ($LASTEXITCODE -ne 0) { throw "Build failed (exit code $LASTEXITCODE)" }
-"Build successful: comfy_aimdo\aimdo_rocm.dll`n"
-
-# Copy amdhip64_7.dll to comfy_aimdo directory
-$amdhipDll = "$rocmBase\bin\amdhip64_7.dll"
-if (Test-Path $amdhipDll) {
-    Copy-Item $amdhipDll -Destination "comfy_aimdo\" -Force
-    "Copied amdhip64_7.dll to comfy_aimdo\"
-} else {
-    Write-Warning "amdhip64_7.dll not found at: $amdhipDll"
-}
+"Build successful: comfy_aimdo\aimdo_rocm.dll"
