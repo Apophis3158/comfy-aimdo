@@ -43,6 +43,12 @@ void aimdo_teardown_hooks();
 
 static inline bool aimdo_wddm_init(CUdevice dev) { return true; }
 static inline void aimdo_wddm_cleanup() {}
+static inline bool aimdo_setup_hooks() {
+#if !defined(__HIP_PLATFORM_AMD__)
+    return true;
+#endif
+}
+static inline void aimdo_teardown_hooks() {}
 
 static inline bool poll_budget_deficit() {
     return cuda_budget_deficit();
@@ -96,7 +102,7 @@ void log_reset_shots();
     static uint64_t _sc_;                                                                       \
     if ((!log_level || log_level >= (level)) && _sc_ < log_shot_counter) {                      \
         _sc_ = (do_shot_counter) ? log_shot_counter : 0;                                        \
-        fprintf(stderr, "aimdo: %s:%d:%s:", __FILE__, __LINE__, get_level_str(level));          \
+        fprintf(stderr, "aimdo: %s:%d:%s: ", __FILE__, __LINE__, get_level_str(level));         \
         fprintf(stderr, __VA_ARGS__);                                                           \
         fflush(stderr);                                                                         \
     }                                                                                           \
@@ -106,7 +112,7 @@ void log_reset_shots();
 #define log_shot(level, ...) do_log(true, level, __VA_ARGS__)
 
 /* The default VRAM headroom. Different deficit methods with BYO headroom */
-#define VRAM_HEADROOM (256 * 1024 * 1024)
+#define VRAM_HEADROOM (256 * M)
 
 /* control.c */
 extern uint64_t vram_capacity;
@@ -151,13 +157,11 @@ static inline CUresult three_stooges(CUdeviceptr vaddr, size_t size, int device,
 
     CUmemAllocationProp prop = {
         .type = CU_MEM_ALLOCATION_TYPE_PINNED,
-        .location.type = CU_MEM_LOCATION_TYPE_DEVICE,
-        .location.id = device,
+        .location = { CU_MEM_LOCATION_TYPE_DEVICE, device },
     };
 
     CUmemAccessDesc accessDesc = {
-        .location.type = CU_MEM_LOCATION_TYPE_DEVICE,
-        .location.id = device,
+        .location = { CU_MEM_LOCATION_TYPE_DEVICE, device },
         .flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE,
     };
 
