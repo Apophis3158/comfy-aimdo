@@ -38,7 +38,7 @@ if ($LASTEXITCODE -ne 0) { throw "Detours build failed (vcvars or nmake error)" 
     -shared -O3 -D__HIP_PLATFORM_AMD__ -Wno-unused-command-line-argument `
     -I"$rocmBase/include" -I"$detoursDir/include" -Isrc `
     -L"$rocmBase/lib" -L"$detoursDir/lib.X64" `
-    -lamdhip64 -ldxgi -ldxguid -ldetours `
+    -lamdhip64 -ldxgi -ldxguid -ldetours -lonecore `
     -o"comfy_aimdo/aimdo_rocm.dll"
 if ($LASTEXITCODE -ne 0) { throw "Build failed (exit code $LASTEXITCODE)" }
 
