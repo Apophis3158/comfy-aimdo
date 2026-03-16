@@ -56,16 +56,24 @@ def init(implementation: AimdoImpl | None = None):
     try:
         base_path = Path(__file__).parent.resolve()
         system = platform.system()
-        errors = []
         if system == "Windows":
             ext = "dll"
+            # For ROCm on Windows: preload amdhip64 from rocm_sdk_core
+            if implementation == AimdoImpl.ROCM:
+                try:
+                    from . import _rocm_init
+                    _rocm_init.initialize()
+                except ImportError:
+                    pass  # _rocm_init.py not present or rocm_sdk not installed
+            mode = 0
         elif system == "Linux":
             ext = "so"
+            mode = 258
         else:
             logging.info(f"comfy-aimdo unsupported operating system: {system}")
             logging.info(f"NOTE: comfy-aimdo currently only supports Windows and Linux")
             return False
-        lib = ctypes.CDLL(str(base_path / f"{impl}.{ext}"), mode=258)
+        lib = ctypes.CDLL(str(base_path / f"{impl}.{ext}"), mode=mode)
     except Exception as e:
         logging.info(f"comfy-aimdo failed to load: {e}")
         logging.info(f"NOTE: comfy-aimdo currently only supports Nvidia and AMD GPUs")
