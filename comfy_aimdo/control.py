@@ -58,33 +58,22 @@ def init(implementation: AimdoImpl | None = None):
         system = platform.system()
         if system == "Windows":
             ext = "dll"
-
-            # Fix print "HIP Library Path: C:\WINDOWS\SYSTEM32\amdhip64_7.dll"
-            # On Windows with ROCm, ensure the ROCm/HIP bin folder is in the DLL search path
+            # For ROCm on Windows: preload amdhip64 from rocm_sdk_core
             if implementation == AimdoImpl.ROCM:
-                bin_path = None
-                if "VIRTUAL_ENV" in os.environ:
-                    bin_path = Path(os.environ['VIRTUAL_ENV']) / "Lib" / "site-packages" / "_rocm_sdk_core" / "bin"
-                    if not bin_path.exists():
-                        bin_path = None
-                if bin_path is None and "HIP_PATH" in os.environ:
-                    bin_path = Path(os.environ['HIP_PATH']) / "bin"
-                    if not bin_path.exists():
-                        bin_path = None
-
-                if bin_path is not None:
-                    logging.debug(f"Adding ROCm bin path to DLL search directories: {bin_path}")
-                    try:
-                        os.add_dll_directory(str(bin_path))
-                    except Exception as e:
-                        logging.info(f"Failed to add ROCm bin path to DLL search directories: {e}")
+                try:
+                    from . import _rocm_init
+                    _rocm_init.initialize()
+                except ImportError:
+                    pass  # _rocm_init.py not present or rocm_sdk not installed
+            mode = 0
         elif system == "Linux":
             ext = "so"
+            mode = 258
         else:
             logging.info(f"comfy-aimdo unsupported operating system: {system}")
             logging.info("NOTE: comfy-aimdo currently only supports Windows and Linux")
             return False
-        lib = ctypes.CDLL(str(base_path / f"{impl}.{ext}"), mode=258)
+        lib = ctypes.CDLL(str(base_path / f"{impl}.{ext}"), mode=mode)
     except Exception as e:
         logging.info(f"comfy-aimdo failed to load: {e}")
         logging.info("NOTE: comfy-aimdo currently only supports Nvidia and AMD GPUs")
