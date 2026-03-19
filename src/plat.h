@@ -1,16 +1,10 @@
 #pragma once
 
 #if defined(__HIP_PLATFORM_AMD__)
-#  include <hip/hip_runtime.h>
 #  include "plat_hip.h"
 #else
-#  include <cuda.h>
 #  include "plat_cuda.h"
 #endif
-
-/* NOTE: cuda_runtime.h is banned here. Always use the driver APIs.
- * Add duck-types in plat_cuda.h
- */
 
 #include <string.h>
 #include <stdio.h>

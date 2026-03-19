@@ -4,12 +4,6 @@
 #include <windows.h>
 #include <dxgi1_4.h>
 
-#if defined(__HIP_PLATFORM_AMD__)
-#  include <hip/hip_runtime.h>
-#else
-#  include <cuda.h>
-#endif
-
 static struct {
     IDXGIFactory4 *factory;
     IDXGIAdapter3 *adapter;
