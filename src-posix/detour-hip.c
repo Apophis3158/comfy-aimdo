@@ -1,3 +1,5 @@
+#if defined(__HIP_PLATFORM_AMD__)
+
 #include "../src/plat.h"
 #include <dlfcn.h>
 #include <stdbool.h>
@@ -40,3 +42,4 @@ void aimdo_teardown_hooks() {
 	printf("No teardown\n");
 };
 
+#endif // defined(__HIP_PLATFORM_AMD__)

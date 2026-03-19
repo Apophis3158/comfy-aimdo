@@ -1,9 +1,6 @@
 #include <hip/hip_runtime.h>
 #include <stdbool.h>
 
-bool aimdo_setup_hooks();
-void aimdo_teardown_hooks();
-
 // Map CUDA functions and constants to HIP equivalents
 #define CUDA_ERROR_OUT_OF_MEMORY hipErrorOutOfMemory
 #define CUDA_SUCCESS hipSuccess
