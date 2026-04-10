@@ -66,7 +66,11 @@ bool init(int cuda_device_id) {
         !CHECK_CU(cuDeviceTotalMem(&vram_capacity, dev)) ||
         !CHECK_CU(cuDevicePrimaryCtxRetain(&aimdo_cuda_ctx, dev)) ||
         !CHECK_CU(cuCtxSetCurrent(aimdo_cuda_ctx)) ||
-        !aimdo_wddm_init(dev)) {
+        !allocations_init()) {
+        return false;
+    }
+    if (!aimdo_wddm_init(dev)) {
+        allocations_cleanup();
         return false;
     }
 
@@ -82,4 +86,5 @@ bool init(int cuda_device_id) {
 SHARED_EXPORT
 void cleanup() {
     aimdo_wddm_cleanup();
+    allocations_cleanup();
 }

@@ -13,6 +13,7 @@ typedef struct SizeEntry {
 } SizeEntry;
 
 static SizeEntry *size_table[SIZE_HASH_SIZE];
+static void *size_table_lock;
 
 static inline unsigned int size_hash(CUdeviceptr ptr) {
     return ((uintptr_t)ptr >> 10 ^ (uintptr_t)ptr >> 21) % SIZE_HASH_SIZE;
@@ -20,24 +21,73 @@ static inline unsigned int size_hash(CUdeviceptr ptr) {
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
-static CRITICAL_SECTION size_table_lock;
-static volatile LONG size_table_lock_init;
+
+static inline bool st_init(void) {
+    CRITICAL_SECTION *lock = (CRITICAL_SECTION *)malloc(sizeof(*lock));
+
+    if (!lock) {
+        return false;
+    }
+
+    InitializeCriticalSection(lock);
+    size_table_lock = lock;
+    return true;
+}
+
+static inline void st_cleanup(void) {
+    CRITICAL_SECTION *lock = (CRITICAL_SECTION *)size_table_lock;
+
+    if (!lock) {
+        return;
+    }
+
+    DeleteCriticalSection(lock);
+    free(lock);
+    size_table_lock = NULL;
+}
 
 static inline void st_lock(void) {
-    if (!InterlockedCompareExchange(&size_table_lock_init, 1, 0)) {
-        InitializeCriticalSection(&size_table_lock);
-        InterlockedExchange(&size_table_lock_init, 2);
-    }
-    while (size_table_lock_init != 2) { /* spin until init done */ }
-    EnterCriticalSection(&size_table_lock);
+    EnterCriticalSection((CRITICAL_SECTION *)size_table_lock);
 }
-static inline void st_unlock(void) { LeaveCriticalSection(&size_table_lock); }
+static inline void st_unlock(void) { LeaveCriticalSection((CRITICAL_SECTION *)size_table_lock); }
 #else
 #include <pthread.h>
-static pthread_mutex_t size_table_lock = PTHREAD_MUTEX_INITIALIZER;
-static inline void st_lock(void) { pthread_mutex_lock(&size_table_lock); }
-static inline void st_unlock(void) { pthread_mutex_unlock(&size_table_lock); }
+
+static inline bool st_init(void) {
+    pthread_mutex_t *lock = (pthread_mutex_t *)malloc(sizeof(*lock));
+
+    if (!lock || pthread_mutex_init(lock, NULL) != 0) {
+        free(lock);
+        return false;
+    }
+
+    size_table_lock = lock;
+    return true;
+}
+
+static inline void st_cleanup(void) {
+    pthread_mutex_t *lock = (pthread_mutex_t *)size_table_lock;
+
+    if (!lock) {
+        return;
+    }
+
+    pthread_mutex_destroy(lock);
+    free(lock);
+    size_table_lock = NULL;
+}
+
+static inline void st_lock(void) { pthread_mutex_lock((pthread_mutex_t *)size_table_lock); }
+static inline void st_unlock(void) { pthread_mutex_unlock((pthread_mutex_t *)size_table_lock); }
 #endif
+
+bool allocations_init(void) {
+    return st_init();
+}
+
+void allocations_cleanup(void) {
+    st_cleanup();
+}
 
 static inline void account_alloc(CUdeviceptr ptr, size_t size) {
     unsigned int h = size_hash(ptr);
