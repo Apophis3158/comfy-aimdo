@@ -11,6 +11,8 @@ static struct {
     IDXGIAdapter3 *adapter;
 } G_WDDM;
 
+static uint64_t timestamp_last_check;
+
 bool aimdo_wddm_init(CUdevice dev)
 {
     int fail_code = 1;
@@ -72,12 +74,11 @@ bool poll_budget_deficit(const char **prevailing_deficit_method)
     size_t free_vram = 0, total_vram = 0;
 
     uint64_t now = GET_TICK();
-    static uint64_t last_check = 0;
 
-    if (now - last_check < 2000) {
+    if (now - timestamp_last_check < 2000) {
         return true;
     }
-    last_check = now;
+    timestamp_last_check = now;
     total_vram_last_check = total_vram_usage;
 
     if (G_WDDM.adapter) {
