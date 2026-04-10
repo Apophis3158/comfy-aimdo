@@ -6,10 +6,7 @@
 
 #include <cuda.h>
 
-static struct {
-    IDXGIFactory4 *factory;
-    IDXGIAdapter3 *adapter;
-} G_WDDM;
+static IDXGIAdapter3 *g_wddm_adapter;
 
 static uint64_t timestamp_last_check;
 
@@ -17,11 +14,17 @@ bool aimdo_wddm_init(CUdevice dev)
 {
     int fail_code = 1;
     LUID cuda_luid;
+    IDXGIFactory4 *factory;
     IDXGIAdapter1 *adapter;
     UINT i;
     unsigned int node_mask;
 
+    factory = NULL;
     adapter = NULL;
+    if (g_wddm_adapter) {
+        g_wddm_adapter->lpVtbl->Release(g_wddm_adapter);
+        g_wddm_adapter = NULL;
+    }
 
     if (!CHECK_CU(cuDeviceGetLuid((char *)&cuda_luid, &node_mask, dev))) {
         goto fail;
@@ -29,30 +32,34 @@ bool aimdo_wddm_init(CUdevice dev)
 
     fail_code++;
 
-    if (FAILED(CreateDXGIFactory1(&IID_IDXGIFactory4, (void **)&G_WDDM.factory))) {
+    if (FAILED(CreateDXGIFactory1(&IID_IDXGIFactory4, (void **)&factory))) {
         goto fail;
     }
 
-    for (i = 0; G_WDDM.factory->lpVtbl->EnumAdapters1(G_WDDM.factory, i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+    for (i = 0; factory->lpVtbl->EnumAdapters1(factory, i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
         DXGI_ADAPTER_DESC1 desc;
         adapter->lpVtbl->GetDesc1(adapter, &desc);
 
         if (desc.AdapterLuid.LowPart == cuda_luid.LowPart &&
             desc.AdapterLuid.HighPart == cuda_luid.HighPart) {
 
-            if (FAILED(adapter->lpVtbl->QueryInterface(adapter, &IID_IDXGIAdapter3, (void **)&G_WDDM.adapter))) {
+            if (FAILED(adapter->lpVtbl->QueryInterface(adapter, &IID_IDXGIAdapter3, (void **)&g_wddm_adapter))) {
                 adapter->lpVtbl->Release(adapter);
                 break;
             }
 
             adapter->lpVtbl->Release(adapter);
+            factory->lpVtbl->Release(factory);
             return true;
         }
         adapter->lpVtbl->Release(adapter);
     }
 
 fail:
-    G_WDDM.adapter = NULL;
+    g_wddm_adapter = NULL;
+    if (factory) {
+        factory->lpVtbl->Release(factory);
+    }
     log(WARNING, "comfy-aimdo WDDM init failed (%d). aimdo is blind to the CUDA Sysmem Fallback Policy\n", fail_code)
     return false;
 }
@@ -81,8 +88,8 @@ bool poll_budget_deficit(const char **prevailing_deficit_method)
     timestamp_last_check = now;
     total_vram_last_check = total_vram_usage;
 
-    if (G_WDDM.adapter) {
-        if (SUCCEEDED(G_WDDM.adapter->lpVtbl->QueryVideoMemoryInfo(G_WDDM.adapter, 0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info))) {
+    if (g_wddm_adapter) {
+        if (SUCCEEDED(g_wddm_adapter->lpVtbl->QueryVideoMemoryInfo(g_wddm_adapter, 0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info))) {
             effective_budget = info.Budget;
         } else {
             log(WARNING, "comfy-aimdo WDDM VRAM query failed. Using physical capacity as fallback\n");
@@ -106,10 +113,8 @@ bool poll_budget_deficit(const char **prevailing_deficit_method)
 
 void aimdo_wddm_cleanup()
 {
-    if (G_WDDM.adapter) {
-        G_WDDM.adapter->lpVtbl->Release(G_WDDM.adapter);
-    }
-    if (G_WDDM.factory) {
-        G_WDDM.factory->lpVtbl->Release(G_WDDM.factory);
+    if (g_wddm_adapter) {
+        g_wddm_adapter->lpVtbl->Release(g_wddm_adapter);
+        g_wddm_adapter = NULL;
     }
 }
