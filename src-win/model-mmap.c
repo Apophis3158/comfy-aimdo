@@ -111,7 +111,8 @@ void *model_mmap_allocate(char *file_path) {
         goto fail_map;
     }
 
-    log(DEBUG, "%s: returning %p (base=%p size=%llu)\n", __func__, (void *)mmap, mmap->base_address, mmap->size);
+    log(DEBUG, "%s: returning %p (base=%p size=%llu)\n", __func__,
+        (void *)mmap, mmap->base_address, (ull)mmap->size);
 
     return mmap;
 

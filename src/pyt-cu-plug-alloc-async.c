@@ -81,7 +81,7 @@ static inline void account_free(CUdeviceptr ptr, CUstream hStream) {
     }
     st_unlock();
 
-    log(ERROR, "%s: could not account free at %p\n", __func__, ptr);
+    log(ERROR, "%s: could not account free at %p\n", __func__, (void *)(uintptr_t)ptr);
 }
 
 int aimdo_cuda_malloc(CUdeviceptr *devPtr, size_t size,
@@ -163,7 +163,7 @@ int aimdo_cuda_malloc_async(CUdeviceptr *devPtr, size_t size, CUstream hStream,
 success:
     account_alloc(*devPtr, size);
 
-    log(VVERBOSE, "%s (return): ptr=%p\n", __func__, *devPtr);
+    log(VVERBOSE, "%s (return): ptr=%p\n", __func__, (void *)(uintptr_t)*devPtr);
     return 0;
 }
 
@@ -171,7 +171,7 @@ int aimdo_cuda_free_async(CUdeviceptr devPtr, CUstream hStream,
                           CUresult (*true_cuMemFreeAsync)(CUdeviceptr, CUstream)) {
     CUresult status;
 
-    log(VVERBOSE, "%s (start) ptr=%p\n", __func__, devPtr);
+    log(VVERBOSE, "%s (start) ptr=%p\n", __func__, (void *)(uintptr_t)devPtr);
 
     if (!devPtr) {
         return 0;
