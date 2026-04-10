@@ -40,12 +40,18 @@ def init_device(device_id: int):
     if lib is None:
         return False
 
-    return lib.init(device_id)
+    if not lib.plat_init():
+        return False
+    if lib.init(device_id):
+        return True
+    lib.plat_cleanup()
+    return False
 
 def deinit():
     global lib
     if lib is not None:
         lib.cleanup()
+        lib.plat_cleanup()
     lib = None
 
 

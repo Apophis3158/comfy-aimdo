@@ -9,6 +9,17 @@ CUcontext aimdo_cuda_ctx;
 
 static uint64_t timestamp_last_check;
 
+SHARED_EXPORT
+bool plat_init() {
+    log_reset_shots();
+    return aimdo_setup_hooks();
+}
+
+SHARED_EXPORT
+void plat_cleanup() {
+    aimdo_teardown_hooks();
+}
+
 bool cuda_budget_deficit(const char **prevailing_deficit_method) {
     uint64_t now = GET_TICK();
     size_t free_vram = 0;
@@ -51,13 +62,11 @@ bool init(int cuda_device_id) {
     CUdevice dev;
     char dev_name[256];
 
-    log_reset_shots();
-
     if (!CHECK_CU(cuDeviceGet(&dev, cuda_device_id)) ||
         !CHECK_CU(cuDeviceTotalMem(&vram_capacity, dev)) ||
         !CHECK_CU(cuDevicePrimaryCtxRetain(&aimdo_cuda_ctx, dev)) ||
         !CHECK_CU(cuCtxSetCurrent(aimdo_cuda_ctx)) ||
-        !plat_init(dev)) {
+        !aimdo_wddm_init(dev)) {
         return false;
     }
 
@@ -72,5 +81,5 @@ bool init(int cuda_device_id) {
 
 SHARED_EXPORT
 void cleanup() {
-    plat_cleanup();
+    aimdo_wddm_cleanup();
 }

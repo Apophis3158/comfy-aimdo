@@ -51,15 +51,6 @@ static inline bool poll_budget_deficit(const char **prevailing_deficit_method) {
 
 #endif
 
-static inline bool plat_init(CUdevice dev) {
-    return aimdo_wddm_init(dev) &&
-           aimdo_setup_hooks();
-}
-static inline void plat_cleanup() {
-    aimdo_wddm_cleanup();
-    aimdo_teardown_hooks();
-}
-
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
