@@ -2,9 +2,6 @@
 #include "vrambuf.h"
 
 #define VMM_HASH_SHIFT  21
-#define VMM_HASH_SIZE   (1 << 12) 
-
-static VramBuffer* vmm_table[VMM_HASH_SIZE];
 
 static inline unsigned int vmm_hash(CUdeviceptr ptr) {
     return ((uintptr_t)(void *)ptr >> VMM_HASH_SHIFT) % VMM_HASH_SIZE;
@@ -41,6 +38,10 @@ void *alloc_fn(size_t size, int device, cudaStream_t stream) {
 
     log(VERBOSE, "%s (start): size=%zuk, device=%d\n", __func__, size / K, device);
 
+    if (!set_devctx_for_device(device)) {
+        return NULL;
+    }
+
     entry = vrambuf_create(device, size);
     if (!entry) {
         return NULL;
@@ -64,7 +65,7 @@ SHARED_EXPORT
 void free_fn(void* ptr, size_t size, int device, cudaStream_t stream) {
     log_shot(DEBUG, "Pytorch is freeing VRAM ...\n");
     log(VERBOSE, "%s (start) ptr=%p size=%zuk, device=%d\n", __func__, ptr, size / K, device);
-    if (ptr == NULL) {
+    if (ptr == NULL || !set_devctx_for_device(device)) {
         return;
     }
 

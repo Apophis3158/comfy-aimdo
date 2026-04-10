@@ -19,6 +19,7 @@ typedef struct CUstream_st *cudaStream_t;
 
 /* control.c */
 bool cuda_budget_deficit(const char **prevailing_deficit_method);
+extern CUcontext aimdo_cuda_ctx;
 
 #if defined(_WIN32) || defined(_WIN64)
 
@@ -50,6 +51,8 @@ static inline bool poll_budget_deficit(const char **prevailing_deficit_method) {
 }
 
 #endif
+
+#include "control.h"
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
@@ -99,12 +102,6 @@ void log_reset_shots();
 
 /* The default VRAM headroom. Different deficit methods with BYO headroom */
 #define VRAM_HEADROOM (256 * 1024 * 1024)
-
-/* control.c */
-extern uint64_t vram_capacity;
-extern uint64_t total_vram_usage;
-extern uint64_t total_vram_last_check;
-extern ssize_t deficit_sync;
 
 static inline size_t budget_deficit(size_t size) {
     ssize_t deficit_simple, deficit_delta;
@@ -178,7 +175,7 @@ fail:
 /* model_vbar.c */
 size_t vbars_free(size_t size);
 SHARED_EXPORT
-uint64_t vbars_analyze(bool only_dirty);
+uint64_t vbars_analyze(void *devctx, bool only_dirty);
 
 /* pyt-cu-alloc.c */
 int aimdo_cuda_malloc(CUdeviceptr *dptr, size_t size,
@@ -194,8 +191,5 @@ int aimdo_cuda_free_async(CUdeviceptr devPtr, CUstream hStream,
 bool allocations_init(void);
 void allocations_cleanup(void);
 void allocations_analyze();
-
-/* control.c */
-extern CUcontext aimdo_cuda_ctx;
 SHARED_EXPORT
-void aimdo_analyze();
+void aimdo_analyze(void *devctx);

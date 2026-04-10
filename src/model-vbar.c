@@ -27,10 +27,15 @@ typedef struct ModelVBAR {
     ResidentPage residency_map[1]; /* Must be last! */
 } ModelVBAR;
 
-ModelVBAR highest_priority;
-ModelVBAR lowest_priority;
-
 static inline void one_time_setup() {
+    if (!highest_priority_p) {
+        highest_priority_p = calloc(2, sizeof(*highest_priority_p));
+        if (!highest_priority_p) {
+            log(CRITICAL, "Host OOM\n");
+            return;
+        }
+        lowest_priority_p = highest_priority_p + 1;
+    }
     if (!highest_priority.lower) {
         assert(!lowest_priority.higher);
         highest_priority.lower = &lowest_priority;
@@ -38,11 +43,11 @@ static inline void one_time_setup() {
     }
 }
 
-static bool vbars_dirty;
-
 SHARED_EXPORT
-uint64_t vbars_analyze(bool only_dirty) {
+uint64_t vbars_analyze(void *devctx, bool only_dirty) {
     size_t calculated_total_vram = 0;
+
+    set_devctx((AimdoContext *)devctx);
 
     one_time_setup();
     if (only_dirty && !vbars_dirty) {
@@ -175,8 +180,10 @@ static inline void insert_vbar_last(ModelVBAR *mv) {
 }
 
 SHARED_EXPORT
-void *vbar_allocate(uint64_t size, int device) {
+void *vbar_allocate(void *devctx, uint64_t size, int device) {
     ModelVBAR *mv;
+
+    set_devctx((AimdoContext *)devctx);
 
     one_time_setup();
     log_reset_shots();
@@ -212,15 +219,18 @@ void *vbar_allocate(uint64_t size, int device) {
 }
 
 SHARED_EXPORT
-void vbar_set_watermark_limit(void *vbar, uint64_t size) {
+void vbar_set_watermark_limit(void *devctx, void *vbar, uint64_t size) {
     ModelVBAR *mv = (ModelVBAR *)vbar;
+
+    set_devctx((AimdoContext *)devctx);
 
     log(DEBUG, "%s: size=%zu\n", __func__, size);
     mv->watermark_limit = VBAR_GET_PAGE_NR_UP(size);
 }
 
 SHARED_EXPORT
-void vbars_reset_watermark_limits() {
+void vbars_reset_watermark_limits(void *devctx) {
+    set_devctx((AimdoContext *)devctx);
     one_time_setup();
     log(VERBOSE, "%s\n", __func__);
 
@@ -230,8 +240,10 @@ void vbars_reset_watermark_limits() {
 }
 
 SHARED_EXPORT
-void vbar_prioritize(void *vbar) {
+void vbar_prioritize(void *devctx, void *vbar) {
     ModelVBAR *mv = (ModelVBAR *)vbar;
+
+    set_devctx((AimdoContext *)devctx);
 
     log(DEBUG, "%s vbar=%p\n", __func__, vbar);
     vbars_dirty = true;
@@ -245,8 +257,10 @@ void vbar_prioritize(void *vbar) {
 }
 
 SHARED_EXPORT
-void vbar_deprioritize(void *vbar) {
+void vbar_deprioritize(void *devctx, void *vbar) {
     ModelVBAR *mv = (ModelVBAR *)vbar;
+
+    set_devctx((AimdoContext *)devctx);
 
     log(DEBUG, "%s vbar=%p\n", __func__, vbar);
     vbars_dirty = true;
@@ -258,7 +272,8 @@ void vbar_deprioritize(void *vbar) {
 }
 
 SHARED_EXPORT
-uint64_t vbar_get(void *vbar) {
+uint64_t vbar_get(void *devctx, void *vbar) {
+    set_devctx((AimdoContext *)devctx);
     log(DEBUG, "%s vbar=%p\n", __func__, vbar);
     return (uint64_t)((ModelVBAR *)vbar)->vbar;
 }
@@ -268,10 +283,12 @@ uint64_t vbar_get(void *vbar) {
 #define VBAR_FAULT_ERROR             2
 
 SHARED_EXPORT
-int vbar_fault(void *vbar, uint64_t offset, uint64_t size, uint32_t *signature) {
+int vbar_fault(void *devctx, void *vbar, uint64_t offset, uint64_t size, uint32_t *signature) {
     ModelVBAR *mv = (ModelVBAR *)vbar;
     int ret = VBAR_FAULT_SUCCESS;
     size_t signature_index = 0;
+
+    set_devctx((AimdoContext *)devctx);
 
     size_t page_end = VBAR_GET_PAGE_NR_UP(offset + size);
 
@@ -335,8 +352,10 @@ int vbar_fault(void *vbar, uint64_t offset, uint64_t size, uint32_t *signature) 
 }
 
 SHARED_EXPORT
-void vbar_unpin(void *vbar, uint64_t offset, uint64_t size) {
+void vbar_unpin(void *devctx, void *vbar, uint64_t offset, uint64_t size) {
     ModelVBAR *mv = (ModelVBAR *)vbar;
+
+    set_devctx((AimdoContext *)devctx);
 
     log(VVERBOSE, "%s (start): offset=%lldk, size=%lldk\n", __func__, (ull)(offset / K), (ull)(size / K));
     vbars_dirty = true;
@@ -352,8 +371,10 @@ void vbar_unpin(void *vbar, uint64_t offset, uint64_t size) {
 }
 
 SHARED_EXPORT
-void vbar_free(void *vbar) {
+void vbar_free(void *devctx, void *vbar) {
     ModelVBAR *mv = (ModelVBAR *)vbar;
+
+    set_devctx((AimdoContext *)devctx);
 
     log(DEBUG, "%s: vbar=%p\n", __func__, vbar);
     vbars_dirty = true;
@@ -369,28 +390,34 @@ void vbar_free(void *vbar) {
 }
 
 SHARED_EXPORT
-size_t vbar_loaded_size(void *vbar) {
+size_t vbar_loaded_size(void *devctx, void *vbar) {
     ModelVBAR *mv = (ModelVBAR *)vbar;
+
+    set_devctx((AimdoContext *)devctx);
 
     return mv->resident_count * VBAR_PAGE_SIZE;
 }
 
 SHARED_EXPORT
-size_t vbar_get_nr_pages(void *vbar) {
+size_t vbar_get_nr_pages(void *devctx, void *vbar) {
     ModelVBAR *mv = (ModelVBAR *)vbar;
+    set_devctx((AimdoContext *)devctx);
     return mv->nr_pages;
 }
 
 SHARED_EXPORT
-size_t vbar_get_watermark(void *vbar) {
+size_t vbar_get_watermark(void *devctx, void *vbar) {
     ModelVBAR *mv = (ModelVBAR *)vbar;
+    set_devctx((AimdoContext *)devctx);
     return mv->watermark;
 }
 
 SHARED_EXPORT
-void vbar_get_residency(void *vbar, uint8_t *out, size_t max_pages) {
+void vbar_get_residency(void *devctx, void *vbar, uint8_t *out, size_t max_pages) {
     ModelVBAR *mv = (ModelVBAR *)vbar;
     size_t n = mv->nr_pages < max_pages ? mv->nr_pages : max_pages;
+
+    set_devctx((AimdoContext *)devctx);
     for (size_t i = 0; i < n; i++) {
         ResidentPage *rp = &mv->residency_map[i];
         /* bit 0: resident, bit 1: pinned */
@@ -399,10 +426,12 @@ void vbar_get_residency(void *vbar, uint8_t *out, size_t max_pages) {
 }
 
 SHARED_EXPORT
-uint64_t vbar_free_memory(void *vbar, uint64_t size) {
+uint64_t vbar_free_memory(void *devctx, void *vbar, uint64_t size) {
     ModelVBAR *mv = (ModelVBAR *)vbar;
     size_t pages_to_free = VBAR_GET_PAGE_NR_UP(size);
     size_t pages_freed = 0;
+
+    set_devctx((AimdoContext *)devctx);
 
     log(DEBUG, "%s (start): size=%lldk\n", __func__, (ull)size);
     vbars_dirty = true;

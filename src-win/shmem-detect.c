@@ -6,10 +6,6 @@
 
 #include <cuda.h>
 
-static IDXGIAdapter3 *g_wddm_adapter;
-
-static uint64_t timestamp_last_check;
-
 bool aimdo_wddm_init(CUdevice dev)
 {
     int fail_code = 1;
@@ -82,10 +78,10 @@ bool poll_budget_deficit(const char **prevailing_deficit_method)
 
     uint64_t now = GET_TICK();
 
-    if (now - timestamp_last_check < 2000) {
+    if (now - wddm_timestamp_last_check < 2000) {
         return true;
     }
-    timestamp_last_check = now;
+    wddm_timestamp_last_check = now;
     total_vram_last_check = total_vram_usage;
 
     if (g_wddm_adapter) {

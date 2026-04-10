@@ -1,6 +1,5 @@
 #include "plat.h"
 
-#define SIZE_HASH_SIZE 1024
 /* cudaMalloc does not guarantee fragmentation handling as well as cudaMallocAsync,
  * so we reserve a small extra headroom when forcing budget pressure.
  */
@@ -11,9 +10,6 @@ typedef struct SizeEntry {
     size_t size;
     struct SizeEntry *next;
 } SizeEntry;
-
-static SizeEntry *size_table[SIZE_HASH_SIZE];
-static void *size_table_lock;
 
 static inline unsigned int size_hash(CUdeviceptr ptr) {
     return ((uintptr_t)ptr >> 10 ^ (uintptr_t)ptr >> 21) % SIZE_HASH_SIZE;
@@ -45,7 +41,6 @@ static inline void st_cleanup(void) {
     free(lock);
     size_table_lock = NULL;
 }
-
 static inline void st_lock(void) {
     EnterCriticalSection((CRITICAL_SECTION *)size_table_lock);
 }
@@ -139,7 +134,7 @@ int aimdo_cuda_malloc(CUdeviceptr *devPtr, size_t size,
     CUdeviceptr dptr;
     CUresult status = 0;
 
-    if (!devPtr || !true_cuMemAlloc_v2) {
+    if (!devPtr || !true_cuMemAlloc_v2 || !set_devctx_for_current_cuda_ctx()) {
         return 1;
     }
 
@@ -170,7 +165,7 @@ int aimdo_cuda_free(CUdeviceptr devPtr,
     if (!devPtr) {
         return 0;
     }
-    if (!true_cuMemFree_v2) {
+    if (!true_cuMemFree_v2 || !set_devctx_for_current_cuda_ctx()) {
         return 1;
     }
 
@@ -190,7 +185,7 @@ int aimdo_cuda_malloc_async(CUdeviceptr *devPtr, size_t size, CUstream hStream,
 
     log(VVERBOSE, "%s (start) size=%zuk stream=%p\n", __func__, size / K, hStream);
 
-    if (!devPtr) {
+    if (!devPtr || !set_devctx_for_current_cuda_ctx()) {
         return 1;
     }
 
@@ -225,6 +220,9 @@ int aimdo_cuda_free_async(CUdeviceptr devPtr, CUstream hStream,
 
     if (!devPtr) {
         return 0;
+    }
+    if (!set_devctx_for_current_cuda_ctx()) {
+        return 1;
     }
 
     status = true_cuMemFreeAsync(devPtr, hStream);
