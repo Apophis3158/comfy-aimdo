@@ -28,9 +28,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build custom build image
+      - name: Build custom CUDA build image
         if: runner.os == 'Linux'
         run: docker build -t custom-cuda-builder -f docker/cuda-on-manylinux.Dockerfile .
+
+      - name: Build custom ROCm build image
+        if: runner.os == 'Linux'
+        run: docker build -t custom-rocm-builder -f docker/rocm-on-manylinux.Dockerfile .
 
       - name: Manual CUDA Extraction (Windows)
         if: runner.os == 'Windows'
@@ -38,18 +42,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download v0.0.0 -p "win-cuda-raw.tgz" -R Comfy-Org/comfy-aimdo
-          
+
           mkdir C:\CUDA_SDK -Force
           tar -xf win-cuda-raw.tgz -C C:\CUDA_SDK
-
-          # Add Detours
-          git clone --depth 1 https://github.com/microsoft/Detours.git C:\Detours
-          cd C:\Detours
-
-          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-          $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
-
-          cmd.exe /c "call `"$vcvars`" && cd /d C:\Detours && nmake"
 
           if (Test-Path "C:\CUDA_SDK\include\crt\host_defines.h") {
               Write-Host "✅ CUDA SDK successfully integrated."
@@ -59,7 +54,36 @@ jobs:
           }
         shell: pwsh
 
-      - name: Windows build
+      - name: Download and Setup ROCm SDK (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $rocmSDK = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm_sdk_core-7.2.0.dev0-py3-none-win_amd64.whl"
+          Invoke-WebRequest -Uri $rocmSDK -OutFile ROCm_SDK.zip
+          Expand-Archive -Path ROCm_SDK.zip -DestinationPath C:\ -Force
+
+          if (Test-Path "C:\_rocm_sdk_core\include\hip\hip_runtime.h") {
+              Write-Host "✅ ROCm SDK successfully installed."
+          } else {
+              Write-Error "❌ ROCm SDK extraction failed or structure incorrect."
+              exit 1
+          }
+        shell: pwsh
+
+      - name: Build Detours (Windows)
+        if: runner.os == 'Windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Add Detours
+          git clone --depth 1 https://github.com/microsoft/Detours.git C:\Detours
+          cd C:\Detours
+
+          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
+
+          cmd.exe /c "call `"$vcvars`" && cd /d C:\Detours && nmake"
+
+      - name: Build CUDA (Windows)
         if: runner.os == 'Windows'
         run: |
           for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do set "VS_PATH=%%i"
@@ -69,6 +93,18 @@ jobs:
             /Isrc /Isrc-win /IC:/CUDA_SDK/include /IC:/Detours/include /FIcompiler.h /Fe:comfy_aimdo/aimdo.dll ^
             /link /LIBPATH:C:/CUDA_SDK/lib/x64 /LIBPATH:C:/Detours/lib.X64 ^
             cuda.lib cudart.lib dxgi.lib dxguid.lib detours.lib onecore.lib
+        shell: cmd
+
+      - name: Build ROCm (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          C:\_rocm_sdk_core\lib\llvm\bin\clang.exe src/*.c src-win/*.c ^
+            -xc --target=x86_64-pc-windows-msvc ^
+            -shared -O3 -D__HIP_PLATFORM_AMD__ -Wno-unused-command-line-argument ^
+            -IC:/_rocm_sdk_core/include -IC:/Detours/include -Isrc ^
+            -LC:/_rocm_sdk_core/lib -LC:/Detours/lib.X64 ^
+            -lamdhip64 -ldxgi -ldxguid -ldetours -lonecore ^
+            -ocomfy_aimdo/aimdo_rocm.dll
         shell: cmd
 
       - name: Build default Stub Wheel
@@ -98,13 +134,19 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile $dest -Headers $headers -UseBasicParsing
           Write-Host "✅ Downloaded virtualenv.pyz"
 
+      - name: Build ROCm (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm -v $(pwd):/project -w /project custom-rocm-builder \
+            bash ./scripts/build-linux-aimdo.sh --rocm
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.21.3
         env:
-          CIBW_MANYLINUX_X86_64_IMAGE: custom-cuda-builder 
+          CIBW_MANYLINUX_X86_64_IMAGE: custom-cuda-builder
           CIBW_BUILD: "cp39-manylinux_x86_64 cp39-win_amd64"
           CIBW_BEFORE_BUILD_LINUX: bash ./scripts/build-linux-aimdo.sh
-          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair --exclude libcuda.so.1 -w {dest_dir} {wheel}"
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair --exclude libcuda.so.1 --exclude libamdhip64.so.6 -w {dest_dir} {wheel}"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4

@@ -3,9 +3,32 @@ import ctypes
 import platform
 from pathlib import Path
 import logging
+import importlib.util
 
 lib = None
 devctxs = []
+
+def detect_vendor():
+    version = ""
+    try:
+        torch_spec = importlib.util.find_spec("torch")
+        if torch_spec is None:
+            return ""
+        locations = torch_spec.submodule_search_locations or []
+        for folder in locations:
+            ver_file = Path(folder) / "version.py"
+            if ver_file.is_file():
+                spec = importlib.util.spec_from_file_location("torch_version_import", ver_file)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                version = module.__version__
+    except Exception as e:
+        logging.warning("Failed to detect Torch version: %s", e)
+
+    if '+rocm' in version:
+        return "_rocm"
+
+    return ""
 
 def init():
     global lib
@@ -13,20 +36,34 @@ def init():
     if lib is not None:
         return True
 
+    plat = detect_vendor()
+
     try:
         base_path = Path(__file__).parent.resolve()
         system = platform.system()
         if system == "Windows":
-            lib = ctypes.CDLL(str(base_path / "aimdo.dll"))
+            ext = "dll"
+            # For ROCm on Windows: preload amdhip64 from rocm_sdk_core
+            if plat == "_rocm":
+                try:
+                    import rocm_sdk
+                    rocm_sdk.initialize_process(preload_shortnames=['amdhip64'])
+                except Exception as e:
+                    logging.warning(f"comfy-aimdo failed to initialize rocm_sdk: {e}")
+                    logging.info("NOTE: rocm_sdk is required for ROCm support on Windows")
+                    return False
+            mode = 0
         elif system == "Linux":
-            lib = ctypes.CDLL(str(base_path / "aimdo.so"), mode=258)
+            ext = "so"
+            mode = 258
         else:
-            logging.info(f"comfy-aimdo os not supported {system}")
-            logging.info(f"NOTE: comfy-aimdo is currently only support for Windows and Linux")
+            logging.info(f"comfy-aimdo unsupported operating system: {system}")
+            logging.info("NOTE: comfy-aimdo currently only supports Windows and Linux")
             return False
+        lib = ctypes.CDLL(str(base_path / f"aimdo{plat}.{ext}"), mode=mode)
     except Exception as e:
         logging.info(f"comfy-aimdo failed to load: {e}")
-        logging.info(f"NOTE: comfy-aimdo is currently only support for Nvidia GPUs")
+        logging.info("NOTE: comfy-aimdo currently only supports Nvidia and AMD GPUs")
         return False
 
     lib.get_total_vram_usage.argtypes = [ctypes.c_void_p]

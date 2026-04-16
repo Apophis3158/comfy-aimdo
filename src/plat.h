@@ -1,13 +1,16 @@
 #pragma once
 
+#if defined(__HIP_PLATFORM_AMD__)
+#include "plat_hip.h"
+#else
 #include <cuda.h>
 
 /* NOTE: cuda_runtime.h is banned here. Always use the driver APIs.
  * Add duck-types here.
  */
-
 typedef int cudaError_t;
 typedef struct CUstream_st *cudaStream_t;
+#endif
 
 #include <string.h>
 #include <stdio.h>
@@ -16,6 +19,9 @@ typedef struct CUstream_st *cudaStream_t;
 #include <stdbool.h>
 #include <stdlib.h>
 #include <assert.h>
+
+#define STRINGIFY_HELPER(x) #x
+#define STRINGIFY(x) STRINGIFY_HELPER(x)
 
 /* control.c */
 bool cuda_budget_deficit(const char **prevailing_deficit_method);
@@ -90,7 +96,7 @@ void log_reset_shots();
     static _Thread_local uint64_t _sc_;                                                         \
     if ((!log_level || log_level >= (level)) && _sc_ < log_shot_counter) {                      \
         _sc_ = (do_shot_counter) ? log_shot_counter : 0;                                        \
-        fprintf(stderr, "aimdo: %s:%d:%s:", __FILE__, __LINE__, get_level_str(level));          \
+        fprintf(stderr, "aimdo[%s] %s:%d: ", get_level_str(level), __FILE__, __LINE__);         \
         fprintf(stderr, __VA_ARGS__);                                                           \
         fflush(stderr);                                                                         \
     }                                                                                           \
@@ -100,7 +106,7 @@ void log_reset_shots();
 #define log_shot(level, ...) do_log(true, level, __VA_ARGS__)
 
 /* The default VRAM headroom. Different deficit methods with BYO headroom */
-#define VRAM_HEADROOM (256 * 1024 * 1024)
+#define VRAM_HEADROOM (256 * M)
 
 static inline size_t budget_deficit(size_t size) {
     ssize_t deficit_simple, deficit_delta;
@@ -139,13 +145,11 @@ static inline CUresult three_stooges(CUdeviceptr vaddr, size_t size, int device,
 
     CUmemAllocationProp prop = {
         .type = CU_MEM_ALLOCATION_TYPE_PINNED,
-        .location.type = CU_MEM_LOCATION_TYPE_DEVICE,
-        .location.id = device,
+        .location = { CU_MEM_LOCATION_TYPE_DEVICE, device },
     };
 
     CUmemAccessDesc accessDesc = {
-        .location.type = CU_MEM_LOCATION_TYPE_DEVICE,
-        .location.id = device,
+        .location = { CU_MEM_LOCATION_TYPE_DEVICE, device },
         .flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE,
     };
 

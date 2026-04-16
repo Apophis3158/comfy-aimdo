@@ -4,7 +4,15 @@ set -euo pipefail
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 BUILD_DIR="$ROOT_DIR/build"
-OUTPUT_PATH="$ROOT_DIR/comfy_aimdo/aimdo.so"
+
+if [[ "${1:-}" == "--rocm" ]]; then
+    BACKEND="rocm"
+    OUTPUT_PATH="$ROOT_DIR/comfy_aimdo/aimdo_rocm.so"
+else
+    BACKEND="cuda"
+    OUTPUT_PATH="$ROOT_DIR/comfy_aimdo/aimdo.so"
+fi
+
 FUNCHOOK_VERSION=1.1.3
 FUNCHOOK_SRC="$BUILD_DIR/funchook-$FUNCHOOK_VERSION"
 FUNCHOOK_BUILD_DIR="$BUILD_DIR/funchook-$FUNCHOOK_VERSION-distorm"
@@ -44,10 +52,20 @@ fi
 mkdir -p "$(dirname -- "$OUTPUT_PATH")"
 
 # shellcheck disable=SC2086
-gcc -shared -o "$OUTPUT_PATH" -fPIC -O2 -g -pthread \
-    ${AIMDO_EXTRA_CFLAGS:-} \
-    "$ROOT_DIR"/src/*.c "$ROOT_DIR"/src-posix/*.c \
-    -I"$ROOT_DIR/src" -I"$FUNCHOOK_SRC/include" -I"$CUDA_INCLUDE_DIR" \
-    -L"$CUDA_STUB_DIR" \
-    "$FUNCHOOK_BUILD_DIR/libfunchook.a" "$FUNCHOOK_BUILD_DIR/libdistorm.a" \
-    -lcuda -ldl
+if [[ "${1:-}" == "--rocm" ]]; then
+    gcc -shared -o "$OUTPUT_PATH" -fPIC -O2 -g -pthread \
+        ${AIMDO_EXTRA_CFLAGS:-} -Wno-error=deprecated-declarations -D__HIP_PLATFORM_AMD__ \
+        "$ROOT_DIR"/src/*.c "$ROOT_DIR"/src-posix/*.c \
+        -I"$ROOT_DIR/src" -I"$FUNCHOOK_SRC/include" -I/opt/rocm/include \
+        -L/opt/rocm/lib \
+        "$FUNCHOOK_BUILD_DIR/libfunchook.a" "$FUNCHOOK_BUILD_DIR/libdistorm.a" \
+        -lamdhip64
+else
+    gcc -shared -o "$OUTPUT_PATH" -fPIC -O2 -g -pthread \
+        ${AIMDO_EXTRA_CFLAGS:-} \
+        "$ROOT_DIR"/src/*.c "$ROOT_DIR"/src-posix/*.c \
+        -I"$ROOT_DIR/src" -I"$FUNCHOOK_SRC/include" -I"$CUDA_INCLUDE_DIR" \
+        -L"$CUDA_STUB_DIR" \
+        "$FUNCHOOK_BUILD_DIR/libfunchook.a" "$FUNCHOOK_BUILD_DIR/libdistorm.a" \
+        -lcuda -ldl
+fi

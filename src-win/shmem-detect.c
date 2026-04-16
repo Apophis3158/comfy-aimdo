@@ -4,7 +4,25 @@
 #include <windows.h>
 #include <dxgi1_4.h>
 
-#include <cuda.h>
+#if defined(__HIP_PLATFORM_AMD__)
+static CUresult cuDeviceGetLuid(char* cuda_luid, unsigned int* deviceNodeMask, CUdevice dev) {
+    hipDeviceProp_t props;
+    hipError_t err = hipGetDeviceProperties(&props, dev);
+    if (err != hipSuccess) {
+        return err;
+    }
+    memcpy(cuda_luid, props.luid, sizeof(LUID));
+    *deviceNodeMask = props.luidDeviceNodeMask;
+    /* Verify the LUID is non-zero — AMD drivers may not populate it */
+    {
+        LUID zero = {0};
+        if (memcmp(cuda_luid, &zero, sizeof(LUID)) == 0) {
+            return hipErrorInvalidValue;
+        }
+    }
+    return hipSuccess;
+}
+#endif
 
 bool aimdo_wddm_init(CUdevice dev)
 {
@@ -67,8 +85,8 @@ fail:
  */
 
 /* FIXME: This should be 0 if sysmem fallback is disabled by the user */
-#define WDDM_BUDGET_HEADROOM (512 * 1024 * 1024)
-#define CUDA_BUDGET_HEADROOM (192 * 1024 * 1024)
+#define WDDM_BUDGET_HEADROOM (512 * M)
+#define CUDA_BUDGET_HEADROOM (192 * M)
 
 bool poll_budget_deficit(const char **prevailing_deficit_method)
 {
@@ -100,7 +118,7 @@ bool poll_budget_deficit(const char **prevailing_deficit_method)
 
         if (deficit_cuda > deficit_sync) {
             deficit_sync = deficit_cuda;
-            *prevailing_deficit_method = "cuMemGetInfo (Windows)";
+            *prevailing_deficit_method = STRINGIFY(cuMemGetInfo) "(Windows)";
         }
     }
 

@@ -114,7 +114,7 @@ static inline void account_free(CUdeviceptr ptr, CUstream hStream) {
         if (entry->ptr == ptr) {
             *prev = entry->next;
 
-            log(VVERBOSE, "Freed: ptr=0x%llx, size=%zuk, stream=%p\n", ptr, entry->size / K, hStream);
+            log(VVERBOSE, "Freed: ptr=0x%p, size=%zuk, stream=%p\n", (void *)ptr, entry->size / K, hStream);
             total_vram_usage -= CUDA_ALIGN_UP(entry->size);
 
             st_unlock();

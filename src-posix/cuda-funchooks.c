@@ -12,10 +12,15 @@ static funchook_t *funchook_state;
 bool aimdo_setup_hooks(void) {
     void *h_real_cuda;
     int status;
+#if defined(__HIP_PLATFORM_AMD__)
+    const char* plat_lib = "libamdhip64.so.6";
+#else
+    const char* plat_lib = "libcuda.so.1";
+#endif
 
-    h_real_cuda = dlopen("libcuda.so.1", RTLD_LAZY | RTLD_NOLOAD);
+    h_real_cuda = dlopen(plat_lib, RTLD_LAZY | RTLD_NOLOAD);
     if (!h_real_cuda) {
-        log(ERROR, "%s: libcuda.so.1 not found in process memory: %s\n", __func__, dlerror());
+        log(ERROR, "%s: %s not found in process memory: %s\n", __func__, plat_lib, dlerror());
         return false;
     }
 

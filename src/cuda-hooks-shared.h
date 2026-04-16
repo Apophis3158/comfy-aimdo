@@ -45,10 +45,12 @@ static CUresult CUDAAPI aimdo_cuMemFreeAsync_ptsz(CUdeviceptr dptr, CUstream hSt
 }
 
 static const HookEntry hooks[] = {
-    { (void **)&true_cuMemAlloc_v2,        aimdo_cuMemAlloc_v2,        "cuMemAlloc_v2" },
-    { (void **)&true_cuMemFree_v2,         aimdo_cuMemFree_v2,         "cuMemFree_v2" },
-    { (void **)&true_cuMemAllocAsync,      aimdo_cuMemAllocAsync,      "cuMemAllocAsync" },
-    { (void **)&true_cuMemAllocAsync_ptsz, aimdo_cuMemAllocAsync_ptsz, "cuMemAllocAsync_ptsz" },
-    { (void **)&true_cuMemFreeAsync,       aimdo_cuMemFreeAsync,       "cuMemFreeAsync" },
-    { (void **)&true_cuMemFreeAsync_ptsz,  aimdo_cuMemFreeAsync_ptsz,  "cuMemFreeAsync_ptsz" },
+    { (void **)&true_cuMemAlloc_v2,        aimdo_cuMemAlloc_v2,        STRINGIFY(cuMemAlloc_v2) },
+    { (void **)&true_cuMemFree_v2,         aimdo_cuMemFree_v2,         STRINGIFY(cuMemFree_v2) },
+    { (void **)&true_cuMemAllocAsync,      aimdo_cuMemAllocAsync,      STRINGIFY(cuMemAllocAsync) },
+    { (void **)&true_cuMemFreeAsync,       aimdo_cuMemFreeAsync,       STRINGIFY(cuMemFreeAsync) },
+#if !defined(__HIP_PLATFORM_AMD__) // not available in ROCm, should add workaround if needed
+    { (void **)&true_cuMemAllocAsync_ptsz, aimdo_cuMemAllocAsync_ptsz, STRINGIFY(cuMemAllocAsync_ptsz) },
+    { (void **)&true_cuMemFreeAsync_ptsz,  aimdo_cuMemFreeAsync_ptsz,  STRINGIFY(cuMemFreeAsync_ptsz) },
+#endif
 };

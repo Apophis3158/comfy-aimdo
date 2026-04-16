@@ -4,9 +4,21 @@ This project is a pytorch VRAM allocator that implements on-demand offloading of
 
 ## Support:
 
-* **Nvidia GPUs only**
+* **Nvidia GPUs**
+    * **CUDA 12.8+**
+* **AMD GPUs (Experimental)**
+    * **ROCm 6.4+ (Linux)**
+    * <details><summary><strong>ROCm 7.2+ (Windows)</strong></summary>
+
+      In ROCm SDK `hip_runtime_api.h`, many memory related APIs are noted: **implemented on Linux** and **under development on Microsoft Windows**. And the `ROCm 7.2.1` used in the [official installation guide](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/windows/install-pytorch.html#install-pytorch-via-pip) has been proven to have defects when using aimdo.
+
+      Therefore, using [TheRock](https://github.com/ROCm/TheRock) releases is strongly recommended ([install guide](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#installing-releases-using-pip)):
+      - For gfx120x (FP8 support) users should use upstream PyTorch (adding `--pre`):
+        ```
+        pip install --pre -Ui https://rocm.nightlies.amd.com/v2/gfx120X-all torch torchvision torchaudio
+        ```
+      </details>
 * **Pytorch 2.8+**
-* **Cuda 12.8+**
 * **Windows 11+** / **Linux** as per python ManyLinux support
 
 ---
@@ -46,8 +58,9 @@ see examples/example.py
 
 ## Backend:
 
-* VBAR allocation is done with `cuMemAddressReserve()`, faulting with `cuMemCreate()` and `cuMemMap()` and all frees done with appropriate converse APIs.
+* VBAR allocation is done with `cuMemAddressReserve()` (or `hipMemAddressReserve()` for ROCm), faulting with `cuMemCreate()` and `cuMemMap()` and all frees done with appropriate converse APIs.
 * For consistency with VBAR memory management, main pytorch allocator plugin is also implemented with `cuMemAddressReserve` -> `cuMemCreate` -> `cuMemMap`. This also behaves a lot better on Windows systems with System Memory fallback.
+* The library automatically detects your GPU vendor (Nvidia/AMD) and loads the appropriate backend (`aimdo` for CUDA or `aimdo_rocm` for ROCm).
 
 ## Caveats:
 

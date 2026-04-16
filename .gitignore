@@ -7,4 +7,9 @@
 build/
 dist/
 *.egg-info/
+.clang-format
+.vscode/
 .venv/
+venv/
+comfy_aimdo/__pycache__/
+comfy_aimdo/_version.py

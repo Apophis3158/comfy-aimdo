@@ -64,7 +64,7 @@ bool cuda_budget_deficit(const char **prevailing_deficit_method) {
         return false;
     }
     deficit_sync = (ssize_t)VRAM_HEADROOM - (ssize_t)free_vram;
-    *prevailing_deficit_method = "cuMemGetInfo";
+    *prevailing_deficit_method = STRINGIFY(cuMemGetInfo);
     return true;
 }
 
