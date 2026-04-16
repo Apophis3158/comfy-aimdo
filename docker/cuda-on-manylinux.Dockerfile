@@ -8,6 +8,7 @@ RUN sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && \
 RUN yum-config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel7/x86_64/cuda-rhel7.repo
 
 RUN yum install -y \
+    curl \
     cuda-nvcc-12-1 \
     cuda-cudart-devel-12-1 \
     cuda-driver-devel-12-1
