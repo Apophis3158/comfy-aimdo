@@ -21,12 +21,14 @@ bool aimdo_wddm_init(CUdevice dev)
 {
     int fail_code = 1;
     LUID cuda_luid;
+    char adapter_name[256];
     IDXGIFactory4 *factory;
     IDXGIAdapter1 *adapter;
     UINT i;
 
     factory = NULL;
     adapter = NULL;
+    adapter_name[0] = '\0';
     if (g_wddm_adapter) {
         g_wddm_adapter->lpVtbl->Release(g_wddm_adapter);
         g_wddm_adapter = NULL;
@@ -59,11 +61,23 @@ bool aimdo_wddm_init(CUdevice dev)
 
         if (desc.AdapterLuid.LowPart == cuda_luid.LowPart &&
             desc.AdapterLuid.HighPart == cuda_luid.HighPart) {
+            if (!WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, adapter_name,
+                                     sizeof(adapter_name), NULL, NULL)) {
+                strcpy(adapter_name, "<unknown>");
+            }
 
             if (FAILED(adapter->lpVtbl->QueryInterface(adapter, &IID_IDXGIAdapter3, (void **)&g_wddm_adapter))) {
                 adapter->lpVtbl->Release(adapter);
                 break;
             }
+
+            log(INFO,
+                "comfy-aimdo WDDM adapter match: %s runtime_luid=%08lx:%08lx dxgi_luid=%08lx:%08lx\n",
+                adapter_name,
+                (unsigned long)(unsigned int)cuda_luid.HighPart,
+                (unsigned long)cuda_luid.LowPart,
+                (unsigned long)(unsigned int)desc.AdapterLuid.HighPart,
+                (unsigned long)desc.AdapterLuid.LowPart);
 
             adapter->lpVtbl->Release(adapter);
             factory->lpVtbl->Release(factory);
