@@ -4,6 +4,23 @@
 #include <windows.h>
 #include <dxgi1_4.h>
 
+#if defined(__HIP_PLATFORM_AMD__)
+static CUresult cuDeviceGetLuid(char *cuda_luid, unsigned int *deviceNodeMask, CUdevice dev) {
+    hipDeviceProp_t props;
+    LUID zero = {0};
+
+    if (hipGetDeviceProperties(&props, dev) != hipSuccess) {
+        return 1;
+    }
+    memcpy(cuda_luid, props.luid, sizeof(LUID));
+    *deviceNodeMask = props.luidDeviceNodeMask;
+    if (memcmp(cuda_luid, &zero, sizeof(LUID)) == 0) {
+        return 1;
+    }
+    return 0;
+}
+#endif
+
 bool aimdo_wddm_init(CUdevice dev)
 {
     int fail_code = 1;
@@ -37,7 +54,8 @@ bool aimdo_wddm_init(CUdevice dev)
         if (desc.AdapterLuid.LowPart == cuda_luid.LowPart &&
             desc.AdapterLuid.HighPart == cuda_luid.HighPart) {
 
-            if (FAILED(adapter->lpVtbl->QueryInterface(adapter, &IID_IDXGIAdapter3, (void **)&g_wddm_adapter))) {
+            if (FAILED(adapter->lpVtbl->QueryInterface(adapter, &IID_IDXGIAdapter3,
+                                                       (void **)&g_wddm_adapter))) {
                 adapter->lpVtbl->Release(adapter);
                 break;
             }
@@ -83,7 +101,8 @@ bool poll_budget_deficit(const char **prevailing_deficit_method)
     total_vram_last_check = total_vram_usage;
 
     if (g_wddm_adapter) {
-        if (SUCCEEDED(g_wddm_adapter->lpVtbl->QueryVideoMemoryInfo(g_wddm_adapter, 0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info))) {
+        if (SUCCEEDED(g_wddm_adapter->lpVtbl->QueryVideoMemoryInfo(
+                g_wddm_adapter, 0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info))) {
             effective_budget = info.Budget;
         } else {
             log(WARNING, "comfy-aimdo WDDM VRAM query failed. Using physical capacity as fallback\n");

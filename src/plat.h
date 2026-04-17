@@ -1,14 +1,24 @@
 #pragma once
 
+#include "cuda_abi.h"
+
+#if defined(__HIP_PLATFORM_AMD__)
+#include <hip/hip_runtime.h>
+#else
 #include "cuda_dispatch.h"
+#endif
 
 /* NOTE: cuda_runtime.h is banned here. Always use the driver APIs.
  * Keep CUDA SDK headers out of this project and add any required duck-types
  * to cuda_abi.h instead.
  */
 
+#if !defined(__HIP_PLATFORM_AMD__)
 typedef int cudaError_t;
 typedef struct CUstream_st *cudaStream_t;
+
+#define unmap_workaround(va, size)
+#endif
 
 #include <string.h>
 #include <stdio.h>
@@ -54,6 +64,9 @@ static inline bool poll_budget_deficit(const char **prevailing_deficit_method) {
 
 #include "control.h"
 
+#if defined(__HIP_PLATFORM_AMD__)
+#include "plat_hip.h"
+#else
 #define cuInit                      g_cuda.p_cuInit
 #define cuGetErrorString            g_cuda.p_cuGetErrorString
 #define cuCtxGetDevice              g_cuda.p_cuCtxGetDevice
@@ -73,6 +86,7 @@ static inline bool poll_budget_deficit(const char **prevailing_deficit_method) {
 #define cuMemRelease                g_cuda.p_cuMemRelease
 #if defined(_WIN32) || defined(_WIN64)
 #define cuDeviceGetLuid             g_cuda.p_cuDeviceGetLuid
+#endif
 #endif
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
@@ -187,6 +201,7 @@ static inline CUresult three_stooges(CUdeviceptr vaddr, size_t size, int device,
 
 fail_access:
     CHECK_CU(cuMemUnmap(vaddr, size));
+    unmap_workaround(vaddr, size);
 fail_mmap:
     CHECK_CU(cuMemRelease(h));
 fail:
