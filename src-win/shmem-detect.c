@@ -4,6 +4,19 @@
 #include <windows.h>
 #include <dxgi1_4.h>
 
+#if defined(__HIP_PLATFORM_AMD__)
+typedef union {
+    struct {
+        char name[256];
+        char uuid[16];
+        char luid[8];
+    };
+    void *ptr;
+    unsigned long long ull;
+    unsigned char bytes[4096];
+} AimdoHipDeviceProp;
+#endif
+
 bool aimdo_wddm_init(CUdevice dev)
 {
     int fail_code = 1;
@@ -11,7 +24,6 @@ bool aimdo_wddm_init(CUdevice dev)
     IDXGIFactory4 *factory;
     IDXGIAdapter1 *adapter;
     UINT i;
-    unsigned int node_mask;
 
     factory = NULL;
     adapter = NULL;
@@ -21,14 +33,19 @@ bool aimdo_wddm_init(CUdevice dev)
     }
 
 #if defined(__HIP_PLATFORM_AMD__)
-    (void)dev;
-    log(WARNING, "comfy-aimdo WDDM init unavailable for HIP dispatch. Falling back to cuMemGetInfo\n");
-    return true;
-#endif
+    AimdoHipDeviceProp hip_props = {0};
 
+    if (!g_device_get_properties ||
+        !CHECK_CU(g_device_get_properties(hip_props.bytes, dev))) {
+        goto fail;
+    }
+    memcpy(&cuda_luid, hip_props.luid, sizeof(cuda_luid));
+#else
+    unsigned int node_mask;
     if (!CHECK_CU(cuDeviceGetLuid((char *)&cuda_luid, &node_mask, dev))) {
         goto fail;
     }
+#endif
 
     fail_code++;
 
@@ -60,7 +77,7 @@ fail:
     if (factory) {
         factory->lpVtbl->Release(factory);
     }
-    log(WARNING, "comfy-aimdo WDDM init failed (%d). aimdo is blind to the CUDA Sysmem Fallback Policy\n", fail_code)
+    log(WARNING, "comfy-aimdo WDDM init failed (%d). aimdo is blind to the CUDA Sysmem Fallback Policy\n", fail_code);
     return false;
 }
 

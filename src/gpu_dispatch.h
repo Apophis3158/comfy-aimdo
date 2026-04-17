@@ -69,5 +69,9 @@ typedef struct AimdoCudaDispatch {
 
 extern AimdoCudaDispatch g_cuda;
 
+typedef CUresult (CUDAAPI *PFN_deviceGetProperties)(void *prop, CUdevice dev);
+
+extern PFN_deviceGetProperties g_device_get_properties;
+
 bool aimdo_cuda_runtime_init(void);
 void aimdo_cuda_runtime_cleanup(void);

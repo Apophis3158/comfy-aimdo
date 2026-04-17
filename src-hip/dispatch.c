@@ -12,6 +12,7 @@ static void *g_hip_module;
 #endif
 
 AimdoCudaDispatch g_cuda;
+PFN_deviceGetProperties g_device_get_properties;
 
 typedef CUresult (CUDAAPI *PFN_hipHostMalloc)(void **pp, size_t bytesize, unsigned int flags);
 
@@ -132,6 +133,11 @@ bool aimdo_cuda_runtime_init(void) {
     g_cuda.p_cuMemAllocAsync_ptsz = g_cuda.p_cuMemAllocAsync;
     g_cuda.p_cuMemFreeAsync_ptsz = g_cuda.p_cuMemFreeAsync;
 
+    g_device_get_properties = (PFN_deviceGetProperties)aimdo_hip_resolve_symbol("hipGetDevicePropertiesR0600");
+    if (!g_device_get_properties) {
+        g_device_get_properties = (PFN_deviceGetProperties)aimdo_hip_resolve_symbol("hipGetDeviceProperties");
+    }
+
     {
         CUresult err = g_cuda.p_cuInit(0);
 
@@ -153,6 +159,7 @@ bool aimdo_cuda_runtime_init(void) {
 
 void aimdo_cuda_runtime_cleanup(void) {
     memset(&g_cuda, 0, sizeof(g_cuda));
+    g_device_get_properties = NULL;
     g_hip_host_malloc = NULL;
 
     if (!g_hip_module) {
