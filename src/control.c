@@ -136,7 +136,7 @@ bool init(const int *cuda_device_ids, size_t num_devices) {
         }
 
         log(INFO, "comfy-aimdo inited for GPU: %s (VRAM: %zu MB)\n",
-            dev_name, (size_t)(vram_capacity / (1024 * 1024)));
+            dev_name, (size_t)(vram_capacity / M));
     }
 
     set_devctx(NULL);

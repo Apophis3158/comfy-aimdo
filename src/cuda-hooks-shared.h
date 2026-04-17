@@ -49,7 +49,8 @@ static const HookEntry hooks[] = {
     { (void **)&true_cuMemFree_v2,         aimdo_cuMemFree_v2,         STRINGIFY(cuMemFree_v2) },
     { (void **)&true_cuMemAllocAsync,      aimdo_cuMemAllocAsync,      STRINGIFY(cuMemAllocAsync) },
     { (void **)&true_cuMemFreeAsync,       aimdo_cuMemFreeAsync,       STRINGIFY(cuMemFreeAsync) },
-#if !defined(__HIP_PLATFORM_AMD__) // not available in ROCm, should add workaround if needed
+/* __HIP_STREAM_PER_THREAD doesn't use hipMallocAsync_spt(), goes with hipMallocAsync(..., hipStreamPerThread) */
+#if !defined(__HIP_PLATFORM_AMD__)
     { (void **)&true_cuMemAllocAsync_ptsz, aimdo_cuMemAllocAsync_ptsz, STRINGIFY(cuMemAllocAsync_ptsz) },
     { (void **)&true_cuMemFreeAsync_ptsz,  aimdo_cuMemFreeAsync_ptsz,  STRINGIFY(cuMemFreeAsync_ptsz) },
 #endif

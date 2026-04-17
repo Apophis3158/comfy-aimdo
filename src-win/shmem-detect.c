@@ -8,17 +8,15 @@
 static CUresult cuDeviceGetLuid(char* cuda_luid, unsigned int* deviceNodeMask, CUdevice dev) {
     hipDeviceProp_t props;
     hipError_t err = hipGetDeviceProperties(&props, dev);
-    if (err != hipSuccess) {
-        return err;
-    }
+    if (err != hipSuccess) { return err; }
+
     memcpy(cuda_luid, props.luid, sizeof(LUID));
     *deviceNodeMask = props.luidDeviceNodeMask;
+
     /* Verify the LUID is non-zero — AMD drivers may not populate it */
-    {
-        LUID zero = {0};
-        if (memcmp(cuda_luid, &zero, sizeof(LUID)) == 0) {
-            return hipErrorInvalidValue;
-        }
+    LUID zero = {0};
+    if (memcmp(cuda_luid, &zero, sizeof(LUID)) == 0) {
+        return hipErrorInvalidValue;
     }
     return hipSuccess;
 }

@@ -4,15 +4,7 @@ set -euo pipefail
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 BUILD_DIR="$ROOT_DIR/build"
-
-if [[ "${1:-}" == "--rocm" ]]; then
-    BACKEND="rocm"
-    OUTPUT_PATH="$ROOT_DIR/comfy_aimdo/aimdo_rocm.so"
-else
-    BACKEND="cuda"
-    OUTPUT_PATH="$ROOT_DIR/comfy_aimdo/aimdo.so"
-fi
-
+OUTPUT_PATH="$ROOT_DIR/comfy_aimdo/aimdo.so"
 FUNCHOOK_VERSION=1.1.3
 FUNCHOOK_SRC="$BUILD_DIR/funchook-$FUNCHOOK_VERSION"
 FUNCHOOK_BUILD_DIR="$BUILD_DIR/funchook-$FUNCHOOK_VERSION-distorm"
@@ -53,6 +45,7 @@ mkdir -p "$(dirname -- "$OUTPUT_PATH")"
 
 # shellcheck disable=SC2086
 if [[ "${1:-}" == "--rocm" ]]; then
+    OUTPUT_PATH="$ROOT_DIR/comfy_aimdo/aimdo_rocm.so"
     gcc -shared -o "$OUTPUT_PATH" -fPIC -O2 -g -pthread \
         ${AIMDO_EXTRA_CFLAGS:-} -Wno-error=deprecated-declarations -D__HIP_PLATFORM_AMD__ \
         "$ROOT_DIR"/src/*.c "$ROOT_DIR"/src-posix/*.c \

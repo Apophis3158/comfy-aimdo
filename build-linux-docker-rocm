@@ -1,7 +1,0 @@
-#!/bin/bash
-
-set -euo pipefail
-
-docker build -t manylinux-rocm -f docker/rocm-on-manylinux.Dockerfile .
-docker run --rm -v $(pwd):/project -w /project manylinux-rocm \
-    AIMDO_EXTRA_CFLAGS=-Werror bash ./scripts/build-linux-aimdo.sh --rocm

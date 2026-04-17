@@ -13,7 +13,7 @@ bool aimdo_setup_hooks(void) {
     void *h_real_cuda;
     int status;
 #if defined(__HIP_PLATFORM_AMD__)
-    const char* plat_lib = "libamdhip64.so.6";
+    const char* plat_lib = "libamdhip64.so.7";
 #else
     const char* plat_lib = "libcuda.so.1";
 #endif

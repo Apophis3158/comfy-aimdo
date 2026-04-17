@@ -12,6 +12,9 @@ typedef int cudaError_t;
 typedef struct CUstream_st *cudaStream_t;
 #endif
 
+#define STRINGIFY_HELPER(x) #x
+#define STRINGIFY(x) STRINGIFY_HELPER(x)
+
 #include <string.h>
 #include <stdio.h>
 #include <stddef.h>
@@ -19,9 +22,6 @@ typedef struct CUstream_st *cudaStream_t;
 #include <stdbool.h>
 #include <stdlib.h>
 #include <assert.h>
-
-#define STRINGIFY_HELPER(x) #x
-#define STRINGIFY(x) STRINGIFY_HELPER(x)
 
 /* control.c */
 bool cuda_budget_deficit(const char **prevailing_deficit_method);
