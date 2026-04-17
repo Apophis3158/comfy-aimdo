@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include "plat.h"
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -5,6 +7,7 @@
 static HMODULE g_hip_module;
 #else
 #include <dlfcn.h>
+#include <link.h>
 static void *g_hip_module;
 #endif
 
@@ -55,30 +58,60 @@ static void *aimdo_hip_resolve_symbol(const char *symbol) {
 #endif
 }
 
+#if !defined(_WIN32) && !defined(_WIN64)
+static int aimdo_find_loaded_hip_module(struct dl_phdr_info *info, size_t size, void *data) {
+    const char *name = info->dlpi_name;
+    const char *basename;
+
+    (void)size;
+    if (!name || !*name) {
+        return 0;
+    }
+
+    basename = strrchr(name, '/');
+    basename = basename ? basename + 1 : name;
+    if (strcmp(basename, "libamdhip64.so") == 0 || strcmp(basename, "libamdhip64.so.7") == 0 ||
+        strcmp(basename, "libamdhip64.so.6") == 0) {
+        *(const char **)data = name;
+        return 1;
+    }
+
+    return 0;
+}
+#endif
+
 bool aimdo_cuda_runtime_init(void) {
     if (g_cuda.p_cuInit) {
         return true;
     }
 
 #if defined(_WIN32) || defined(_WIN64)
-    g_hip_module = LoadLibraryA("amdhip64.dll");
+    g_hip_module = GetModuleHandleA("amdhip64.dll");
     if (!g_hip_module) {
-        g_hip_module = LoadLibraryA("amdhip64_7.dll");
+        g_hip_module = GetModuleHandleA("amdhip64_7.dll");
     }
     if (!g_hip_module) {
-        log(ERROR, "%s: failed to load the HIP runtime library\n", __func__);
+        log(ERROR, "%s: failed to find an already-loaded HIP runtime library\n", __func__);
         return false;
     }
 #else
-    g_hip_module = dlopen("libamdhip64.so.7", RTLD_LAZY | RTLD_LOCAL);
-    if (!g_hip_module) {
-        g_hip_module = dlopen("libamdhip64.so.6", RTLD_LAZY | RTLD_LOCAL);
+    const char *loaded_hip_module = NULL;
+
+    dl_iterate_phdr(aimdo_find_loaded_hip_module, &loaded_hip_module);
+    if (loaded_hip_module) {
+        g_hip_module = dlopen(loaded_hip_module, RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
     }
     if (!g_hip_module) {
-        g_hip_module = dlopen("libamdhip64.so", RTLD_LAZY | RTLD_LOCAL);
+        g_hip_module = dlopen("libamdhip64.so.7", RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
     }
     if (!g_hip_module) {
-        log(ERROR, "%s: failed to load libamdhip64.so: %s\n", __func__, dlerror());
+        g_hip_module = dlopen("libamdhip64.so.6", RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
+    }
+    if (!g_hip_module) {
+        g_hip_module = dlopen("libamdhip64.so", RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
+    }
+    if (!g_hip_module) {
+        log(ERROR, "%s: failed to find an already-loaded libamdhip64.so\n", __func__);
         return false;
     }
 #endif
@@ -126,9 +159,7 @@ void aimdo_cuda_runtime_cleanup(void) {
         return;
     }
 
-#if defined(_WIN32) || defined(_WIN64)
-    FreeLibrary(g_hip_module);
-#else
+#if !defined(_WIN32) && !defined(_WIN64)
     dlclose(g_hip_module);
 #endif
     g_hip_module = NULL;
