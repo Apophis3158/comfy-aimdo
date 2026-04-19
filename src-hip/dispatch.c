@@ -1,15 +1,12 @@
-#define _GNU_SOURCE
-
 #include "plat.h"
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
-static HMODULE g_hip_module;
 #else
 #include <dlfcn.h>
-#include <link.h>
-static void *g_hip_module;
 #endif
+
+static void *g_hip_module;
 
 AimdoCudaDispatch g_cuda;
 PFN_deviceGetProperties g_device_get_properties;
@@ -51,73 +48,36 @@ static const DispatchSymbol dispatch_symbols[] = {
     { (void **)&g_cuda.p_cuMemRelease, "hipMemRelease" },
 };
 
+static const char *const hip_library_names[] = {
+#if defined(_WIN32) || defined(_WIN64)
+    "amdhip64.dll",
+    "amdhip64_7.dll",
+#else
+    "libamdhip64.so.7",
+    "libamdhip64.so.6",
+    "libamdhip64.so",
+#endif
+};
+
 static void *aimdo_hip_resolve_symbol(const char *symbol) {
 #if defined(_WIN32) || defined(_WIN64)
-    return (void *)GetProcAddress(g_hip_module, symbol);
+    return (void *)GetProcAddress((HMODULE)g_hip_module, symbol);
 #else
     return dlsym(g_hip_module, symbol);
 #endif
 }
-
-#if !defined(_WIN32) && !defined(_WIN64)
-static int aimdo_find_loaded_hip_module(struct dl_phdr_info *info, size_t size, void *data) {
-    const char *name = info->dlpi_name;
-    const char *basename;
-
-    (void)size;
-    if (!name || !*name) {
-        return 0;
-    }
-
-    basename = strrchr(name, '/');
-    basename = basename ? basename + 1 : name;
-    if (strcmp(basename, "libamdhip64.so") == 0 || strcmp(basename, "libamdhip64.so.7") == 0 ||
-        strcmp(basename, "libamdhip64.so.6") == 0) {
-        *(const char **)data = name;
-        return 1;
-    }
-
-    return 0;
-}
-#endif
 
 bool aimdo_cuda_runtime_init(void) {
     if (g_cuda.p_cuInit) {
         return true;
     }
 
-#if defined(_WIN32) || defined(_WIN64)
-    g_hip_module = GetModuleHandleA("amdhip64.dll");
-    if (!g_hip_module) {
-        g_hip_module = GetModuleHandleA("amdhip64_7.dll");
-    }
-    if (!g_hip_module) {
-        log(ERROR, "%s: failed to find an already-loaded HIP runtime library\n", __func__);
+    if (!(g_hip_module = aimdo_find_loaded_module(
+              hip_library_names, ARRAY_SIZE(hip_library_names)))) {
         return false;
     }
-#else
-    const char *loaded_hip_module = NULL;
 
-    dl_iterate_phdr(aimdo_find_loaded_hip_module, &loaded_hip_module);
-    if (loaded_hip_module) {
-        g_hip_module = dlopen(loaded_hip_module, RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
-    }
-    if (!g_hip_module) {
-        g_hip_module = dlopen("libamdhip64.so.7", RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
-    }
-    if (!g_hip_module) {
-        g_hip_module = dlopen("libamdhip64.so.6", RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
-    }
-    if (!g_hip_module) {
-        g_hip_module = dlopen("libamdhip64.so", RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
-    }
-    if (!g_hip_module) {
-        log(ERROR, "%s: failed to find an already-loaded libamdhip64.so\n", __func__);
-        return false;
-    }
-#endif
-
-    for (size_t i = 0; i < sizeof(dispatch_symbols) / sizeof(dispatch_symbols[0]); i++) {
+    for (size_t i = 0; i < ARRAY_SIZE(dispatch_symbols); i++) {
         void *resolved = aimdo_hip_resolve_symbol(dispatch_symbols[i].symbol);
 
         if (!resolved) {

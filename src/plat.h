@@ -64,6 +64,9 @@ static inline bool poll_budget_deficit(const char **prevailing_deficit_method) {
 
 #endif
 
+/* module-load.c */
+void *aimdo_find_loaded_module(const char *const *libraries, size_t library_count);
+
 #include "control.h"
 
 #define cuInit                      g_cuda.p_cuInit
@@ -87,6 +90,7 @@ static inline bool poll_budget_deficit(const char **prevailing_deficit_method) {
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 /* NOTE: align_to must be power of 2 */
 #define ALIGN_UP(x, align_to) (((x) + (align_to) - 1) & ~((align_to) - 1))

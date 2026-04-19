@@ -2,11 +2,11 @@
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
-static HMODULE g_cuda_module;
 #else
 #include <dlfcn.h>
-static void *g_cuda_module;
 #endif
+
+static void *g_cuda_module;
 
 AimdoCudaDispatch g_cuda;
 
@@ -51,33 +51,30 @@ static const DispatchSymbol dispatch_symbols[] = {
 #endif
 };
 
+static const char *const cuda_library_names[] = {
+#if defined(_WIN32) || defined(_WIN64)
+    "nvcuda.dll",
+    "nvcuda64.dll",
+#else
+    "libcuda.so.1",
+    "libcuda.so",
+#endif
+};
+
 bool aimdo_cuda_runtime_init(void) {
     if (g_cuda.p_cuInit) {
         return true;
     }
 
-#if defined(_WIN32) || defined(_WIN64)
-    g_cuda_module = LoadLibraryA("nvcuda.dll");
-    if (!g_cuda_module) {
-        g_cuda_module = LoadLibraryA("nvcuda64.dll");
-    }
-    if (!g_cuda_module) {
-        log(ERROR, "%s: failed to load the CUDA driver library\n", __func__);
+    if (!(g_cuda_module = aimdo_find_loaded_module(
+              cuda_library_names, ARRAY_SIZE(cuda_library_names)))) {
         return false;
     }
 
-    g_cuda.p_cuGetProcAddress = (PFN_cuGetProcAddress)GetProcAddress(g_cuda_module,
+#if defined(_WIN32) || defined(_WIN64)
+    g_cuda.p_cuGetProcAddress = (PFN_cuGetProcAddress)GetProcAddress((HMODULE)g_cuda_module,
                                                                      "cuGetProcAddress");
 #else
-    g_cuda_module = dlopen("libcuda.so.1", RTLD_LAZY | RTLD_LOCAL);
-    if (!g_cuda_module) {
-        g_cuda_module = dlopen("libcuda.so", RTLD_LAZY | RTLD_LOCAL);
-    }
-    if (!g_cuda_module) {
-        log(ERROR, "%s: failed to load libcuda.so.1: %s\n", __func__, dlerror());
-        return false;
-    }
-
     g_cuda.p_cuGetProcAddress = (PFN_cuGetProcAddress)dlsym(g_cuda_module,
                                                             "cuGetProcAddress");
 #endif
@@ -87,7 +84,7 @@ bool aimdo_cuda_runtime_init(void) {
         return false;
     }
 
-    for (size_t i = 0; i < sizeof(dispatch_symbols) / sizeof(dispatch_symbols[0]); i++) {
+    for (size_t i = 0; i < ARRAY_SIZE(dispatch_symbols); i++) {
         void *resolved = NULL;
 
         if (g_cuda.p_cuGetProcAddress(dispatch_symbols[i].symbol, &resolved,
@@ -120,9 +117,7 @@ void aimdo_cuda_runtime_cleanup(void) {
         return;
     }
 
-#if defined(_WIN32) || defined(_WIN64)
-    FreeLibrary(g_cuda_module);
-#else
+#if !defined(_WIN32) && !defined(_WIN64)
     dlclose(g_cuda_module);
 #endif
     g_cuda_module = NULL;
