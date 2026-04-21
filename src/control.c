@@ -42,12 +42,21 @@ bool set_devctx_for_current_cuda_device(void) {
 SHARED_EXPORT
 bool plat_init() {
     log_reset_shots();
-    return aimdo_setup_hooks();
+    if (!aimdo_cuda_runtime_init()) {
+        return false;
+    }
+    if (aimdo_setup_hooks()) {
+        return true;
+    }
+
+    aimdo_cuda_runtime_cleanup();
+    return false;
 }
 
 SHARED_EXPORT
 void plat_cleanup() {
     aimdo_teardown_hooks();
+    aimdo_cuda_runtime_cleanup();
 }
 
 bool cuda_budget_deficit(const char **prevailing_deficit_method) {
@@ -64,7 +73,11 @@ bool cuda_budget_deficit(const char **prevailing_deficit_method) {
         return false;
     }
     deficit_sync = (ssize_t)VRAM_HEADROOM - (ssize_t)free_vram;
+    log(DEBUG,
+        "%s: cuMemGetInfo poll free=%zu MB total=%zu MB deficit_sync=%zd MB recorded=%zu MB\n",
+        __func__, free_vram / M, total_vram / M, deficit_sync / (ssize_t)M, total_vram_usage / M);
     *prevailing_deficit_method = "cuMemGetInfo";
+    log(DEBUG, "%s: prevailing method %s\n", __func__, *prevailing_deficit_method);
     return true;
 }
 

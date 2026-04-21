@@ -4,13 +4,12 @@ set -euo pipefail
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 BUILD_DIR="$ROOT_DIR/build"
-OUTPUT_PATH="$ROOT_DIR/comfy_aimdo/aimdo.so"
+CUDA_OUTPUT_PATH="$ROOT_DIR/comfy_aimdo/aimdo.so"
+ROCM_OUTPUT_PATH="$ROOT_DIR/comfy_aimdo/aimdo_rocm.so"
 FUNCHOOK_VERSION=1.1.3
 FUNCHOOK_SRC="$BUILD_DIR/funchook-$FUNCHOOK_VERSION"
 FUNCHOOK_BUILD_DIR="$BUILD_DIR/funchook-$FUNCHOOK_VERSION-distorm"
 FUNCHOOK_TARBALL="$BUILD_DIR/funchook-$FUNCHOOK_VERSION.tar.gz"
-CUDA_INCLUDE_DIR=/usr/local/cuda-12.1/include
-CUDA_STUB_DIR=/usr/local/cuda-12.1/targets/x86_64-linux/lib/stubs
 
 if [ ! -f "$FUNCHOOK_SRC/CMakeLists.txt" ]; then
     URL="https://github.com/kubo/funchook/releases/download/v$FUNCHOOK_VERSION/funchook-$FUNCHOOK_VERSION.tar.gz"
@@ -41,13 +40,21 @@ if [ ! -f "$FUNCHOOK_BUILD_DIR/libfunchook.a" ] || [ ! -f "$FUNCHOOK_BUILD_DIR/l
     cmake --build "$FUNCHOOK_BUILD_DIR" -j"$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
 fi
 
-mkdir -p "$(dirname -- "$OUTPUT_PATH")"
+mkdir -p "$(dirname -- "$CUDA_OUTPUT_PATH")"
 
 # shellcheck disable=SC2086
-gcc -shared -o "$OUTPUT_PATH" -fPIC -O2 -g -pthread \
+gcc -shared -o "$CUDA_OUTPUT_PATH" -fPIC -O2 -g -pthread \
     ${AIMDO_EXTRA_CFLAGS:-} \
-    "$ROOT_DIR"/src/*.c "$ROOT_DIR"/src-posix/*.c \
-    -I"$ROOT_DIR/src" -I"$FUNCHOOK_SRC/include" -I"$CUDA_INCLUDE_DIR" \
-    -L"$CUDA_STUB_DIR" \
+    "$ROOT_DIR"/src/*.c "$ROOT_DIR"/src-cuda/dispatch.c "$ROOT_DIR"/src-posix/*.c \
+    -I"$ROOT_DIR/src" -I"$FUNCHOOK_SRC/include" \
     "$FUNCHOOK_BUILD_DIR/libfunchook.a" "$FUNCHOOK_BUILD_DIR/libdistorm.a" \
-    -lcuda -ldl
+    -ldl
+
+# shellcheck disable=SC2086
+gcc -shared -o "$ROCM_OUTPUT_PATH" -fPIC -O2 -g -pthread \
+    -D__HIP_PLATFORM_AMD__ \
+    ${AIMDO_EXTRA_CFLAGS:-} \
+    "$ROOT_DIR"/src/*.c "$ROOT_DIR"/src-hip/dispatch.c "$ROOT_DIR"/src-posix/*.c \
+    -I"$ROOT_DIR/src" -I"$FUNCHOOK_SRC/include" \
+    "$FUNCHOOK_BUILD_DIR/libfunchook.a" "$FUNCHOOK_BUILD_DIR/libdistorm.a" \
+    -ldl

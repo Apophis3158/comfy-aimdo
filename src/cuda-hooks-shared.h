@@ -9,6 +9,7 @@
 
 typedef struct {
     void **true_ptr;
+    void **target_ptr;
     void *hook_ptr;
     const char *name;
 } HookEntry;
@@ -45,10 +46,10 @@ static CUresult CUDAAPI aimdo_cuMemFreeAsync_ptsz(CUdeviceptr dptr, CUstream hSt
 }
 
 static const HookEntry hooks[] = {
-    { (void **)&true_cuMemAlloc_v2,        aimdo_cuMemAlloc_v2,        "cuMemAlloc_v2" },
-    { (void **)&true_cuMemFree_v2,         aimdo_cuMemFree_v2,         "cuMemFree_v2" },
-    { (void **)&true_cuMemAllocAsync,      aimdo_cuMemAllocAsync,      "cuMemAllocAsync" },
-    { (void **)&true_cuMemAllocAsync_ptsz, aimdo_cuMemAllocAsync_ptsz, "cuMemAllocAsync_ptsz" },
-    { (void **)&true_cuMemFreeAsync,       aimdo_cuMemFreeAsync,       "cuMemFreeAsync" },
-    { (void **)&true_cuMemFreeAsync_ptsz,  aimdo_cuMemFreeAsync_ptsz,  "cuMemFreeAsync_ptsz" },
+    { (void **)&true_cuMemAlloc_v2,        (void **)&g_cuda.p_cuMemAlloc_v2,        aimdo_cuMemAlloc_v2,        "cuMemAlloc_v2" },
+    { (void **)&true_cuMemFree_v2,         (void **)&g_cuda.p_cuMemFree_v2,         aimdo_cuMemFree_v2,         "cuMemFree_v2" },
+    { (void **)&true_cuMemAllocAsync,      (void **)&g_cuda.p_cuMemAllocAsync,      aimdo_cuMemAllocAsync,      "cuMemAllocAsync" },
+    { (void **)&true_cuMemAllocAsync_ptsz, (void **)&g_cuda.p_cuMemAllocAsync_ptsz, aimdo_cuMemAllocAsync_ptsz, "cuMemAllocAsync_ptsz" },
+    { (void **)&true_cuMemFreeAsync,       (void **)&g_cuda.p_cuMemFreeAsync,       aimdo_cuMemFreeAsync,       "cuMemFreeAsync" },
+    { (void **)&true_cuMemFreeAsync_ptsz,  (void **)&g_cuda.p_cuMemFreeAsync_ptsz,  aimdo_cuMemFreeAsync_ptsz,  "cuMemFreeAsync_ptsz" },
 };

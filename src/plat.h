@@ -1,13 +1,26 @@
 #pragma once
 
-#include <cuda.h>
+#include "gpu_dispatch.h"
 
 /* NOTE: cuda_runtime.h is banned here. Always use the driver APIs.
- * Add duck-types here.
+ * Keep SDK headers out of this project and add any required duck-types
+ * to the repo-owned ABI headers instead.
  */
 
 typedef int cudaError_t;
 typedef struct CUstream_st *cudaStream_t;
+
+#if defined(__HIP_PLATFORM_AMD__) && !defined(_WIN32) && !defined(_WIN64)
+#include <sys/mman.h>
+/* Work around ROCm VMM unmap behavior by reprotecting the range after unmap.
+ * On systems where this is fixed, remapping PROT_NONE is harmless.
+ */
+#define unmap_workaround(va, size) \
+    mmap((void *)(va), (size), PROT_NONE, \
+         MAP_PRIVATE | MAP_FIXED | MAP_NORESERVE | MAP_ANONYMOUS, -1, 0)
+#else
+#define unmap_workaround(va, size)
+#endif
 
 #include <string.h>
 #include <stdio.h>
@@ -51,10 +64,33 @@ static inline bool poll_budget_deficit(const char **prevailing_deficit_method) {
 
 #endif
 
+/* module-load.c */
+void *aimdo_find_loaded_module(const char *const *libraries, size_t library_count);
+
 #include "control.h"
+
+#define cuInit                      g_cuda.p_cuInit
+#define cuGetErrorString            g_cuda.p_cuGetErrorString
+#define cuCtxGetDevice              g_cuda.p_cuCtxGetDevice
+#define cuCtxSynchronize            g_cuda.p_cuCtxSynchronize
+#define cuDeviceGet                 g_cuda.p_cuDeviceGet
+#define cuDeviceTotalMem            g_cuda.p_cuDeviceTotalMem
+#define cuDeviceGetName             g_cuda.p_cuDeviceGetName
+#define cuMemGetInfo                g_cuda.p_cuMemGetInfo
+#define cuMemAllocHost              g_cuda.p_cuMemAllocHost
+#define cuMemFreeHost               g_cuda.p_cuMemFreeHost
+#define cuMemAddressReserve         g_cuda.p_cuMemAddressReserve
+#define cuMemAddressFree            g_cuda.p_cuMemAddressFree
+#define cuMemCreate                 g_cuda.p_cuMemCreate
+#define cuMemMap                    g_cuda.p_cuMemMap
+#define cuMemSetAccess              g_cuda.p_cuMemSetAccess
+#define cuMemUnmap                  g_cuda.p_cuMemUnmap
+#define cuMemRelease                g_cuda.p_cuMemRelease
+#define cuDeviceGetLuid             g_cuda.p_cuDeviceGetLuid
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 /* NOTE: align_to must be power of 2 */
 #define ALIGN_UP(x, align_to) (((x) + (align_to) - 1) & ~((align_to) - 1))
@@ -165,6 +201,7 @@ static inline CUresult three_stooges(CUdeviceptr vaddr, size_t size, int device,
 
 fail_access:
     CHECK_CU(cuMemUnmap(vaddr, size));
+    unmap_workaround(vaddr, size);
 fail_mmap:
     CHECK_CU(cuMemRelease(h));
 fail:

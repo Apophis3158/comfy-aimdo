@@ -2,7 +2,6 @@
 
 #include "plat.h"
 
-#include <dlfcn.h>
 #include <funchook.h>
 
 static funchook_t *funchook_state;
@@ -10,36 +9,28 @@ static funchook_t *funchook_state;
 #include "cuda-hooks-shared.h"
 
 bool aimdo_setup_hooks(void) {
-    void *h_real_cuda;
     int status;
 
-    h_real_cuda = dlopen("libcuda.so.1", RTLD_LAZY | RTLD_NOLOAD);
-    if (!h_real_cuda) {
-        log(ERROR, "%s: libcuda.so.1 not found in process memory: %s\n", __func__, dlerror());
+    if (!hooks[0].target_ptr || !*hooks[0].target_ptr) {
+        log(ERROR, "%s: CUDA hook targets are not resolved\n", __func__);
         return false;
     }
 
     funchook_state = funchook_create();
     if (!funchook_state) {
         log(ERROR, "%s: funchook_create failed\n", __func__);
-        goto fail_close_cuda;
+        return false;
     }
 
     for (size_t i = 0; i < sizeof(hooks) / sizeof(hooks[0]); i++) {
-        const char *dlerr;
         const char *detail;
-        void *target_ptr;
 
-        dlerror();
-        target_ptr = dlsym(h_real_cuda, hooks[i].name);
-        dlerr = dlerror();
-        if (dlerr || !target_ptr) {
-            log(ERROR, "%s: failed to resolve %s: %s\n", __func__, hooks[i].name,
-                dlerr ? dlerr : "<missing symbol>");
+        if (!*hooks[i].target_ptr) {
+            log(ERROR, "%s: failed to resolve %s\n", __func__, hooks[i].name);
             goto fail_teardown;
         }
 
-        *hooks[i].true_ptr = target_ptr;
+        *hooks[i].true_ptr = *hooks[i].target_ptr;
         status = funchook_prepare(funchook_state, hooks[i].true_ptr, hooks[i].hook_ptr);
         if (status != FUNCHOOK_ERROR_SUCCESS) {
             detail = funchook_error_message(funchook_state);
@@ -58,14 +49,11 @@ bool aimdo_setup_hooks(void) {
         goto fail_teardown;
     }
 
-    dlclose(h_real_cuda);
     log(DEBUG, "%s: hooks successfully installed\n", __func__);
     return true;
 
 fail_teardown:
     aimdo_teardown_hooks();
-fail_close_cuda:
-    dlclose(h_real_cuda);
     return false;
 }
 

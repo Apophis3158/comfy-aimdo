@@ -32,17 +32,9 @@ jobs:
         if: runner.os == 'Linux'
         run: docker build -t custom-cuda-builder -f docker/cuda-on-manylinux.Dockerfile .
 
-      - name: Manual CUDA Extraction (Windows)
+      - name: Build Detours (Windows)
         if: runner.os == 'Windows'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download v0.0.0 -p "win-cuda-raw.tgz" -R Comfy-Org/comfy-aimdo
-          
-          mkdir C:\CUDA_SDK -Force
-          tar -xf win-cuda-raw.tgz -C C:\CUDA_SDK
-
-          # Add Detours
           git clone --depth 1 https://github.com/microsoft/Detours.git C:\Detours
           cd C:\Detours
 
@@ -50,13 +42,6 @@ jobs:
           $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
 
           cmd.exe /c "call `"$vcvars`" && cd /d C:\Detours && nmake"
-
-          if (Test-Path "C:\CUDA_SDK\include\crt\host_defines.h") {
-              Write-Host "✅ CUDA SDK successfully integrated."
-          } else {
-              Write-Error "❌ Extraction failed or structure incorrect."
-              exit 1
-          }
         shell: pwsh
 
       - name: Windows build
@@ -64,11 +49,17 @@ jobs:
         run: |
           for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do set "VS_PATH=%%i"
           call "%VS_PATH%\VC\Auxiliary\Build\vcvars64.bat"
+          del /q comfy_aimdo\*.dll 2>nul
           cl.exe /LD /O2 ^
-            src/*.c src-win/*.c ^
-            /Isrc /Isrc-win /IC:/CUDA_SDK/include /IC:/Detours/include /FIcompiler.h /Fe:comfy_aimdo/aimdo.dll ^
-            /link /LIBPATH:C:/CUDA_SDK/lib/x64 /LIBPATH:C:/Detours/lib.X64 ^
-            cuda.lib cudart.lib dxgi.lib dxguid.lib detours.lib onecore.lib
+            src/*.c src-cuda/dispatch.c src-win/*.c ^
+            /Isrc /Isrc-win /IC:/Detours/include /FIcompiler.h /Fe:comfy_aimdo/aimdo.dll ^
+            /link /LIBPATH:C:/Detours/lib.X64 ^
+            dxgi.lib dxguid.lib detours.lib onecore.lib
+          cl.exe /LD /O2 /D__HIP_PLATFORM_AMD__ ^
+            src/*.c src-hip/dispatch.c src-win/*.c ^
+            /Isrc /Isrc-win /IC:/Detours/include /FIcompiler.h /Fe:comfy_aimdo/aimdo_rocm.dll ^
+            /link /LIBPATH:C:/Detours/lib.X64 ^
+            dxgi.lib dxguid.lib detours.lib onecore.lib
         shell: cmd
 
       - name: Build default Stub Wheel
