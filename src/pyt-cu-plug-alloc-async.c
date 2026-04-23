@@ -84,12 +84,33 @@ void allocations_cleanup(void) {
     st_cleanup();
 }
 
+static inline size_t accounted_alloc_size(size_t size) {
+    size_t rounded = size;
+
+    /* A best guess at cuda async allocator small allocation handling.
+     * we know it can sub-page small allocations, but we still want to
+     * be conservative and not trust it all the way so clamp the lower
+     * end. Assume page granularity when it makes sense to round up
+     * as so. Just estimate with the actual for everything else in
+     * between.
+     */
+
+    if (rounded <= K) {
+        return K;
+    }
+    if (rounded > CUDA_PAGE_SIZE / 2) {
+        return CUDA_ALIGN_UP(rounded);
+    }
+
+    return rounded;
+}
+
 static inline void account_alloc(CUdeviceptr ptr, size_t size) {
     unsigned int h = size_hash(ptr);
     SizeEntry *entry;
 
     st_lock();
-    total_vram_usage += CUDA_ALIGN_UP(size);
+    total_vram_usage += accounted_alloc_size(size);
 
     entry = (SizeEntry *)malloc(sizeof(*entry));
     if (entry) {
@@ -115,7 +136,7 @@ static inline void account_free(CUdeviceptr ptr, CUstream hStream) {
             *prev = entry->next;
 
             log(VVERBOSE, "Freed: ptr=0x%llx, size=%zuk, stream=%p\n", ptr, entry->size / K, hStream);
-            total_vram_usage -= CUDA_ALIGN_UP(entry->size);
+            total_vram_usage -= accounted_alloc_size(entry->size);
 
             st_unlock();
             free(entry);
