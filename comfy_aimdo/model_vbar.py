@@ -119,7 +119,7 @@ class ModelVBAR:
         return list(buf)
 
     def __del__(self):
-        if control.lib is not None and hasattr(self, '_ptr') and self._ptr:
+        if lib is not None and hasattr(self, '_ptr') and self._ptr:
             lib.vbar_free(self._devctx, self._ptr)
             self._ptr = None
 
