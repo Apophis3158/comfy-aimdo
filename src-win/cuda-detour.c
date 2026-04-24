@@ -21,7 +21,7 @@ static inline bool install_hook_entries(HookEntry *hooks, size_t num_hooks) {
 
     status = (int)DetourTransactionCommit();
     if (status != 0) {
-        log(ERROR, "%s: DetourTransactionCommit failed: %d", __func__, status);
+        log(ERROR, "%s: DetourTransactionCommit failed: %d\n", __func__, status);
         return false;
     }
 
@@ -55,7 +55,7 @@ void aimdo_teardown_hooks() {
 
     status = (int)DetourTransactionCommit();
     if (status != 0) {
-        log(ERROR, "%s: DetourDetach failed: %d", __func__, status);
+        log(ERROR, "%s: DetourDetach failed: %d\n", __func__, status);
     } else {
         log(DEBUG, "%s: hooks successfully removed\n", __func__);
     }
