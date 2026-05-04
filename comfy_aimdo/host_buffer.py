@@ -30,6 +30,9 @@ class HostBuffer:
 
         return int(self._ptr) + offset
 
+    def read_file_slice(self, file_obj, file_offset, size, offset=0):
+        raise NotImplementedError("FIXME implement HostBuffer.read_file_slice")
+
     def __del__(self):
         ptr = getattr(self, "_ptr", None)
         if ptr:
