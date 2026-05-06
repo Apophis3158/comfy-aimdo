@@ -124,17 +124,16 @@ void hostbuf_free(void *hostbuf_ptr) {
 }
 
 SHARED_EXPORT
-void *hostbuf_get_raw_address(void *hostbuf_ptr, uint64_t size, uint64_t offset) {
+void *hostbuf_get_raw_address(void *hostbuf_ptr) {
     HostBuffer *hostbuf = (HostBuffer *)hostbuf_ptr;
-    void *ptr = NULL;
 
-    if (!hostbuf || offset > UINT64_MAX - size) {
+    if (!hostbuf) {
         return NULL;
     }
-    if (hostbuf_grow(hostbuf, offset + size)) {
-        ptr = (char *)hostbuf->base_address + offset;
-    }
-    return ptr;
+    log(VERBOSE, "%s: hostbuf=%p ptr=%p size=%llu committed=%llu\n",
+        __func__, (void *)hostbuf, hostbuf->base_address, (ull)hostbuf->size,
+        (ull)hostbuf->committed_size);
+    return hostbuf->base_address;
 }
 
 SHARED_EXPORT
@@ -170,7 +169,7 @@ void *hostbuf_extend(void *hostbuf_ptr, uint64_t size, bool reallocate, int64_t 
 SHARED_EXPORT
 bool hostbuf_read_file_slice(void *hostbuf_ptr, uint64_t file_handle, uint64_t file_offset,
                              uint64_t size, uint64_t offset) {
-    void *ptr = hostbuf_get_raw_address(hostbuf_ptr, size, offset);
+    void *ptr = (char *)hostbuf_get_raw_address(hostbuf_ptr) + offset;
 
     return size == 0 || (ptr && xfer_file_read(file_handle, file_offset, ptr, (size_t)size));
 }

@@ -14,7 +14,7 @@ if lib is not None:
 
     lib.hostbuf_free.argtypes = [ctypes.c_void_p]
 
-    lib.hostbuf_get_raw_address.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_uint64]
+    lib.hostbuf_get_raw_address.argtypes = [ctypes.c_void_p]
     lib.hostbuf_get_raw_address.restype = ctypes.c_void_p
 
     lib.hostbuf_extend.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_bool, ctypes.POINTER(ctypes.c_int64)]
@@ -44,16 +44,16 @@ def _file_handle(file_obj):
 class HostBuffer:
     def __init__(self, size, prewarm=0):
         size = int(size)
-        self.size = size
+        self.size = 0
         self.prewarm = int(prewarm)
         self._ptr = lib.hostbuf_allocate(self.prewarm)
         if not self._ptr:
             raise RuntimeError("HostBuffer allocation failed")
-        if size and not lib.hostbuf_get_raw_address(self._ptr, size, 0):
-            raise RuntimeError("HostBuffer grow failed")
+        if size:
+            self.extend(size)
 
     def get_raw_address(self):
-        ptr = lib.hostbuf_get_raw_address(self._ptr, 0, 0)
+        ptr = lib.hostbuf_get_raw_address(self._ptr)
         return int(ptr) if ptr else 0
 
     def extend(self, size, reallocate=False):
