@@ -4,9 +4,18 @@ This project is a pytorch VRAM allocator that implements on-demand offloading of
 
 ## Support:
 
-* **Nvidia GPUs only**
+* **Nvidia GPUs**
+    * **CUDA 12.8+**
+* **AMD GPUs (Experimental)**
+    * **Linux: ROCm 7.2.2+** <!-- NOTE: VMM fix: https://github.com/ROCm/rocm-systems/pull/4363 -->
+    * <details><summary><strong>Windows: TheRock 7.13+</strong></summary>
+
+      `ROCm 7.2.1` used in the [official installation guide](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/windows/install-pytorch.html#install-pytorch-via-pip) has been proven to have defects with VMM. And in ROCm SDK `hip_runtime_api.h`, many memory related APIs are noted: **implemented on Linux** and **under development on Microsoft Windows**. <!-- TODO: update after next ROCm release -->
+
+      Therefore, using [TheRock](https://github.com/ROCm/TheRock) releases is strongly recommended ([TheRock installation guide](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#installing-per-family-releases-using-pip)). <!-- TODO: switch to https://github.com/ROCm/TheRock/blob/main/RELEASES.md#installing-multi-arch-pytorch-python-packages after multi-arch torch wheels pass staging tests -->
+
+      </details>
 * **Pytorch 2.8+**
-* **Cuda 12.8+**
 * **Windows 11+** / **Linux** as per python ManyLinux support
 
 ---
@@ -46,7 +55,7 @@ see examples/example.py
 
 ## Backend:
 
-* VBAR allocation is done with `cuMemAddressReserve()`, faulting with `cuMemCreate()` and `cuMemMap()` and all frees done with appropriate converse APIs.
+* VBAR allocation is done with `cuMemAddressReserve()` (`hipMemAddressReserve()` for ROCm), faulting with `cuMemCreate()` and `cuMemMap()` and all frees done with appropriate converse APIs.
 * For consistency with VBAR memory management, main pytorch allocator plugin is also implemented with `cuMemAddressReserve` -> `cuMemCreate` -> `cuMemMap`. This also behaves a lot better on Windows systems with System Memory fallback.
 
 ## Caveats:
