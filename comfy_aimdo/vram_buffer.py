@@ -1,4 +1,5 @@
 import ctypes
+import platform
 
 from . import control
 
@@ -7,7 +8,7 @@ lib = control.lib
 
 def _growth_chunk_size():
     lib_name = str(getattr(lib, "_name", "")).lower()
-    return 2 * 1024**2 if "rocm" in lib_name else 16 * 1024**2
+    return 2 * 1024**2 if "rocm" in lib_name and platform.system() != "Windows" else 16 * 1024**2
 
 
 if lib is not None:
