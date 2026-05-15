@@ -4,4 +4,4 @@
 #include <stddef.h>
 
 bool hostbuf_prewarm_join(void);
-bool hostbuf_prewarm_start(const void *ptr, size_t size);
+bool hostbuf_prewarm_start(void *ptr, size_t size);
