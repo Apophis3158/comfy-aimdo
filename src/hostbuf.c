@@ -94,7 +94,7 @@ static bool hostbuf_truncate_impl(HostBuffer *hostbuf, uint64_t size, bool do_un
         __func__, (void *)hostbuf, hostbuf->base_address, (ull)size,
         (ull)hostbuf->size, (ull)old_committed, (ull)new_committed);
     if (size >= hostbuf->size ||
-        !hostbuf_prewarm_start(NULL, 0) ||
+        !hostbuf_prewarm_join() ||
         (do_unregister && !CHECK_CU(cuMemHostUnregister((char *)hostbuf->base_address + size))) ||
         (new_committed < old_committed &&
         !hostbuf_decommit_address_space((char *)hostbuf->base_address + new_committed,

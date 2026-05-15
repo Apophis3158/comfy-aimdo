@@ -72,8 +72,25 @@ static bool hostbuf_prewarm_pool_init(void) {
     return true;
 }
 
+bool hostbuf_prewarm_join(void) {
+    if (!g_prewarm_pool.mutex) {
+        return true;
+    }
+
+    mutex_lock(g_prewarm_pool.mutex);
+    while (g_prewarm_pool.remaining) {
+        condvar_wait(g_prewarm_pool.done_cond, g_prewarm_pool.mutex);
+    }
+    mutex_unlock(g_prewarm_pool.mutex);
+    return true;
+}
+
 bool hostbuf_prewarm_start(const void *ptr, size_t size) {
     size_t page_size = hostbuf_page_size();
+
+    if (!size) {
+        return hostbuf_prewarm_join();
+    }
 
     if (!g_prewarm_pool.mutex && !hostbuf_prewarm_pool_init()) {
         return false;
