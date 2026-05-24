@@ -9,7 +9,7 @@ if os.name == "nt":
     import msvcrt
 
 if lib is not None:
-    lib.hostbuf_allocate.argtypes = [ctypes.c_uint64, ctypes.c_uint64]
+    lib.hostbuf_allocate.argtypes = [ctypes.c_uint64, ctypes.c_uint64, ctypes.c_bool]
     lib.hostbuf_allocate.restype = ctypes.c_void_p
 
     lib.hostbuf_free.argtypes = [ctypes.c_void_p]
@@ -17,7 +17,8 @@ if lib is not None:
     lib.hostbuf_get_raw_address.argtypes = [ctypes.c_void_p]
     lib.hostbuf_get_raw_address.restype = ctypes.c_void_p
 
-    lib.hostbuf_extend.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_bool, ctypes.POINTER(ctypes.c_int64)]
+    lib.hostbuf_extend.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_bool,
+                                   ctypes.c_bool, ctypes.POINTER(ctypes.c_int64)]
     lib.hostbuf_extend.restype = ctypes.c_void_p
 
     lib.hostbuf_read_file_slice.argtypes = [
@@ -51,12 +52,12 @@ def _file_handle(file_obj):
 
 
 class HostBuffer:
-    def __init__(self, size, prewarm=0, max_grow_size=0):
+    def __init__(self, size, prewarm=0, max_grow_size=0, mark_cold=True):
         size = int(size)
         max_mmap_size = max(size, int(max_grow_size))
         self.size = 0
         self.prewarm = max(0, int(prewarm))
-        self._ptr = lib.hostbuf_allocate(self.prewarm, max_mmap_size)
+        self._ptr = lib.hostbuf_allocate(self.prewarm, max_mmap_size, bool(mark_cold))
         if not self._ptr:
             raise RuntimeError("HostBuffer allocation failed")
         if size:
@@ -66,10 +67,11 @@ class HostBuffer:
         ptr = lib.hostbuf_get_raw_address(self._ptr)
         return int(ptr) if ptr else 0
 
-    def extend(self, size, reallocate=False):
+    def extend(self, size, reallocate=False, register=True):
         size = int(size)
         size_delta = ctypes.c_int64(0)
-        ptr = lib.hostbuf_extend(self._ptr, size, bool(reallocate), ctypes.byref(size_delta))
+        ptr = lib.hostbuf_extend(self._ptr, size, bool(reallocate), bool(register),
+                                 ctypes.byref(size_delta))
         self.size += size_delta.value
         if not ptr and size:
             raise RuntimeError("HostBuffer.extend failed")

@@ -10,9 +10,10 @@ typedef struct HostBuffer {
     uint64_t reserved_size;
     uint64_t last_chunk_size;
     uint64_t prewarm;
+    bool mark_cold;
 } HostBuffer;
 
-static bool hostbuf_grow(HostBuffer *hostbuf, uint64_t size) {
+static bool hostbuf_grow(HostBuffer *hostbuf, uint64_t size, bool do_register) {
     size_t page_size = hostbuf_page_size();
     uint64_t target_committed = ALIGN_UP(size + hostbuf->prewarm, page_size);
 
@@ -66,7 +67,8 @@ static bool hostbuf_grow(HostBuffer *hostbuf, uint64_t size) {
          !hostbuf_prewarm_join())) {
         goto fail_decommit;
     }
-    if (!CHECK_CU(cuMemHostRegister((char *)hostbuf->base_address + hostbuf->size,
+    if (do_register &&
+        !CHECK_CU(cuMemHostRegister((char *)hostbuf->base_address + hostbuf->size,
                                     (size_t)(size - hostbuf->size), 0))) {
         goto fail_decommit;
     }
@@ -84,7 +86,9 @@ static bool hostbuf_grow(HostBuffer *hostbuf, uint64_t size) {
     return true;
 
 fail_unregister:
-    CHECK_CU(cuMemHostUnregister((char *)hostbuf->base_address + hostbuf->size));
+    if (do_register) {
+        CHECK_CU(cuMemHostUnregister((char *)hostbuf->base_address + hostbuf->size));
+    }
 fail_decommit:
     if (tail_size) {
         hostbuf_decommit_address_space((char *)hostbuf->base_address + hostbuf->committed_size, tail_size);
@@ -127,16 +131,17 @@ static bool hostbuf_truncate_impl(HostBuffer *hostbuf, uint64_t size, bool do_un
 }
 
 SHARED_EXPORT
-void *hostbuf_allocate(uint64_t prewarm, uint64_t reserved_size) {
+void *hostbuf_allocate(uint64_t prewarm, uint64_t reserved_size, bool mark_cold) {
     HostBuffer *hostbuf = calloc(1, sizeof(*hostbuf));
 
     if (!hostbuf) {
         return NULL;
     }
     hostbuf->prewarm = prewarm;
+    hostbuf->mark_cold = mark_cold;
     hostbuf->reserved_size = ALIGN_UP(reserved_size + prewarm, hostbuf_reserve_granularity());
-    log(VERBOSE, "%s: hostbuf=%p prewarm=%llu reserved_size=%llu\n",
-        __func__, (void *)hostbuf, (ull)prewarm, (ull)hostbuf->reserved_size);
+    log(VERBOSE, "%s: hostbuf=%p prewarm=%llu reserved_size=%llu mark_cold=%d\n",
+        __func__, (void *)hostbuf, (ull)prewarm, (ull)hostbuf->reserved_size, mark_cold);
     return hostbuf;
 }
 
@@ -168,7 +173,8 @@ void *hostbuf_get_raw_address(void *hostbuf_ptr) {
 }
 
 SHARED_EXPORT
-void *hostbuf_extend(void *hostbuf_ptr, uint64_t size, bool reallocate, int64_t *size_delta) {
+void *hostbuf_extend(void *hostbuf_ptr, uint64_t size, bool reallocate,
+                     bool do_register, int64_t *size_delta) {
     HostBuffer *hostbuf = (HostBuffer *)hostbuf_ptr;
     uint64_t old_size;
     uint64_t offset;
@@ -181,21 +187,22 @@ void *hostbuf_extend(void *hostbuf_ptr, uint64_t size, bool reallocate, int64_t 
 
     if (reallocate && hostbuf->last_chunk_size) {
         offset = hostbuf->size - hostbuf->last_chunk_size;
-        if (!CHECK_CU(cuMemHostUnregister((char *)hostbuf->base_address + offset))) {
+        if (do_register &&
+            !CHECK_CU(cuMemHostUnregister((char *)hostbuf->base_address + offset))) {
             return NULL;
         }
         hostbuf->size = offset;
     }
 
     offset = hostbuf->size;
-    if (!hostbuf_grow(hostbuf, offset + size)) {
+    if (!hostbuf_grow(hostbuf, offset + size, do_register)) {
         *size_delta = (int64_t)(hostbuf->size - old_size);
         return NULL;
     }
     hostbuf->last_chunk_size = hostbuf->size - offset;
     *size_delta = (int64_t)(hostbuf->size - old_size);
-    log(VERBOSE, "%s: hostbuf=%p request_size=%llu reallocate=%d offset=%llu ptr=%p size_delta=%lld result_size=%llu committed=%llu\n",
-        __func__, (void *)hostbuf, (ull)size, reallocate, (ull)offset,
+    log(VERBOSE, "%s: hostbuf=%p request_size=%llu reallocate=%d do_register=%d offset=%llu ptr=%p size_delta=%lld result_size=%llu committed=%llu\n",
+        __func__, (void *)hostbuf, (ull)size, reallocate, do_register, (ull)offset,
         (char *)hostbuf->base_address + offset, (long long)*size_delta,
         (ull)hostbuf->size, (ull)hostbuf->committed_size);
     return (char *)hostbuf->base_address + offset;
@@ -213,17 +220,19 @@ bool hostbuf_read_file_slice(void *hostbuf_ptr, int device,
                              uint64_t file_handle, uint64_t file_offset,
                              uint64_t size, uint64_t offset,
                              cudaStream_t stream, uint64_t device_ptr) {
+    HostBuffer *hostbuf = (HostBuffer *)hostbuf_ptr;
     char *host;
 
-    host = (char *)hostbuf_get_raw_address(hostbuf_ptr) + offset;
     if (size == 0) {
         return true;
     }
-    if (!host) {
+    if (!hostbuf || !hostbuf->base_address) {
         return false;
     }
+    host = (char *)hostbuf->base_address + offset;
     if (!stream || !device_ptr) {
-        return xfer_file_read(file_handle, file_offset, host, (size_t)size);
+        return xfer_file_read(file_handle, file_offset, host, (size_t)size,
+                              hostbuf->mark_cold);
     }
     if (device < 0 || !set_devctx_for_device(device)) {
         return false;
@@ -231,7 +240,8 @@ bool hostbuf_read_file_slice(void *hostbuf_ptr, int device,
     for (uint64_t done = 0; done < size; done += HOSTBUF_STREAM_WINDOW) {
         size_t chunk = (size_t)MIN(HOSTBUF_STREAM_WINDOW, size - done);
 
-        if (!xfer_file_read(file_handle, file_offset + done, host + done, chunk) ||
+        if (!xfer_file_read(file_handle, file_offset + done, host + done, chunk,
+                            hostbuf->mark_cold) ||
             !CHECK_CU(cuMemcpyHtoDAsync((CUdeviceptr)(device_ptr + done), host + done,
                                         chunk, (CUstream)stream))) {
             return false;
