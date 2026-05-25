@@ -72,7 +72,12 @@ SHARED_EXPORT
 bool model_mmap_bounce(void *model_mmap_ptr) {
     ModelMMAP *mmap = (ModelMMAP *)model_mmap_ptr;
 
-    log(DEBUG, "%s: %p: SUCCESS in model_mmap bounce (nop)\n", __func__, (void *)mmap);
+    if (!mmap || madvise(mmap->base_address, mmap->size, MADV_DONTNEED) != 0) {
+        log(ERROR, "%s: %p: FAILED in model_mmap bounce (errno=%d)\n", __func__, (void *)mmap, errno);
+        return false;
+    }
+
+    log(DEBUG, "%s: %p: SUCCESS in model_mmap bounce\n", __func__, (void *)mmap);
     return true;
 }
 
