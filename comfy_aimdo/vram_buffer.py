@@ -1,5 +1,4 @@
 import ctypes
-import platform
 
 from . import control
 
